@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "Prompt Enhancer",
+  "version": "1.0",
+  "permissions": ["activeTab", "storage", "scripting"],
+  "host_permissions": ["https://api.anthropic.com/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://chat.openai.com/*", "https://claude.ai/*"],
+      "js": ["content.js"]
+    }
+  ],
+  "background": {
+    "service_worker": "background.bundle.js"
+  },
+  "options_page": "popup.html",
+  "action": {},
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "selectors.json",
+        "criteria.json",
+        "evaluation-criteria.md",
+        "enhancement-criteria.md"
+      ],
+      "matches": ["https://chat.openai.com/*", "https://claude.ai/*"]
+    }
+  ]
+}

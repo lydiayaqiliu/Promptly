@@ -1,0 +1,10 @@
+{
+  "chat.openai.com": {
+    "user": "[data-message-author-role='user']",
+    "assistant": "[data-message-author-role='assistant']"
+  },
+  "claude.ai": {
+    "user": ".mb-1.mt-6.group",
+    "assistant": ".group.relative.pb-3"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "prompt-enhancer",
+  "version": "1.0.0",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0"
+  },
+  "devDependencies": {
+    "esbuild": "latest"
+  },
+  "scripts": {
+    "build": "esbuild background.js --bundle --outfile=background.bundle.js --platform=browser --target=chrome120",
+    "watch": "esbuild background.js --bundle --outfile=background.bundle.js --platform=browser --target=chrome120 --watch"
+  }
+}
