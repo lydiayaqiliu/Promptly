@@ -10,7 +10,6 @@
 | Survey questions | **LLM-generated** each round — questions adapt to actual prompt context |
 | Survey UI location | **Floating modal injected into the page by content.js** — Grammarly-style |
 | Rule files | **Two `.md` files** loaded at startup as system prompt strings |
-| `isEducational` gate | **Removed** — user's icon click is the intent signal |
 | Loop architecture | **Message-driven state machine** in background.js (MV3-safe) |
 | `minRounds` | **Kept** — from `criteria.json`; guarantees minimum context collection |
 | Profile field mapping | **LLM-driven fuzzy mapping** in background.js via `mapResponsesToProfile()` |
