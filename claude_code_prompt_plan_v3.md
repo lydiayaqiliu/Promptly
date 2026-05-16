@@ -40,9 +40,9 @@ background.js STATE MACHINE
   │  if sufficient OR round >= maxRounds:                  → SHOW_PROGRESS to content.js
   └─ ENHANCE: enhancePrompt()                              → modal shows "Enhancing..."
         system prompt = enhancement-criteria.md
-        → enhanced prompt string
-        → INJECT: write to page input field               → modal shows result
-        → modal: "Use this prompt" button or auto-close
+        → enhanced prompt string                          → SHOW_RESULT to content.js
+        → modal shows result textarea
+        → "Use this prompt" button → handleUsePrompt() → injectEnhancedPrompt()
 ```
 
 ---
@@ -145,7 +145,7 @@ KEY CONSTRAINTS:
   - esbuild bundles background.js + @anthropic-ai/sdk → background.bundle.js
   - Anthropic API key: chrome.storage.local key "anthropicKey"
   - Evaluation + survey model: claude-haiku-4-5-20251001
-  - Enhancement model: claude-sonnet-4-20250514
+  - Enhancement model: claude-sonnet-4-6
   - Dialogue history capped at 6000 chars
   - injectEnhancedPrompt() MUST dispatch InputEvent for React/Vue compatibility
   - scrapePreviousDialogue() MUST silently return [] on any failure
@@ -157,7 +157,6 @@ MESSAGE FLOW:
   background.js → content.js   { type: "SHOW_PROGRESS", message }
   background.js → content.js   { type: "SHOW_SURVEY",   questions, round, roundReason }
   content.js  → background.js  { type: "PROFILE_READY", rawResponses }
-  background.js → content.js   { type: "INJECT",        enhancedPrompt }
   background.js → content.js   { type: "SHOW_RESULT",   enhancedPrompt, warning }
   background.js → content.js   { type: "TRIGGER" }
 
@@ -375,6 +374,12 @@ MODAL_CSS must include styles for:
     font-size: 14px; cursor: pointer;
   #pe-submit:hover { background: #6a5de0; }
 
+  .pe-open-input
+    width: 100%; box-sizing: border-box; background: #1a1a22;
+    border: 1px solid #2a2a3a; color: #e8e8f0; border-radius: 8px;
+    padding: 8px 10px; font-size: 13px; font-family: inherit; outline: none;
+  .pe-open-input:focus { border-color: #7c6ef2; }
+
   /* Result */
   #pe-result-text
     width: 100%; box-sizing: border-box; min-height: 120px;
@@ -469,7 +474,7 @@ renderSurvey(questions, round, roundReason, maxRounds)
     block.appendChild(label)
     const opts = document.createElement('div')
     opts.className = 'pe-options'
-    q.options.forEach(opt => {
+    (q.options || []).forEach(opt => {
       const pill = document.createElement('span')
       pill.className = 'pe-option'
       pill.textContent = opt
@@ -481,6 +486,14 @@ renderSurvey(questions, round, roundReason, maxRounds)
       })
       opts.appendChild(pill)
     })
+    if ((q.options || []).length === 0) {
+      const input = document.createElement('input')
+      input.type = 'text'
+      input.className = 'pe-open-input'
+      input.dataset.qi = qi
+      input.placeholder = 'Your answer...'
+      opts.appendChild(input)
+    }
     block.appendChild(opts)
     container.appendChild(block)
   })
@@ -491,11 +504,14 @@ collectModalResponses()
   currentQuestions.forEach((q, qi) => {
     const sel = document.querySelector('.pe-option.pe-selected[data-qi="' + qi + '"]')
     if (sel) responses[q.question] = sel.dataset.value
+    const openInput = document.querySelector('.pe-open-input[data-qi="' + qi + '"]')
+    if (openInput && openInput.value.trim()) responses[q.question] = openInput.value.trim()
   })
   return responses
 
 handleSurveySubmit()
   const rawResponses = collectModalResponses()
+  if (Object.keys(rawResponses).length === 0) return   // nothing selected — don't advance round
   // Send raw question→answer map to background.js for LLM-powered field mapping
   chrome.runtime.sendMessage({ type: 'PROFILE_READY', rawResponses })
   showModalProgress('Checking what we still need...')
@@ -523,6 +539,7 @@ SECTION 3: MESSAGE LISTENER
 chrome.runtime.onMessage.addListener((message) => {
   switch (message.type) {
     case 'TRIGGER':
+      currentQuestions = []   // reset stale state from any previous session
       Promise.all([captureUserPrompt(), scrapePreviousDialogue(), loadProfile()])
         .then(([promptText, rawHistory, userProfile]) => {
           const dialogueHistory = truncateDialogueHistory(rawHistory)
@@ -538,7 +555,7 @@ chrome.runtime.onMessage.addListener((message) => {
       break
     case 'SHOW_RESULT':
       showModalResult(message.enhancedPrompt, message.warning, message.userProfile)
-      breaks
+      break
   }
 })
 
@@ -607,6 +624,7 @@ const criteriasReady = new Promise(resolve => { criteriasReadyResolve = resolve 
     enhancementCriteriaPrompt = enhText
     criteria = critJson
     console.log('[PE background.js] Criteria loaded', criteria)
+    await restoreSessionState()
   } finally {
     criteriasReadyResolve()  // resolves even on fetch failure so handlers never hang
   }
@@ -615,7 +633,6 @@ const criteriasReady = new Promise(resolve => { criteriasReadyResolve = resolve 
 ━━━━━━━ SESSION STATE ━━━━━━━
 
 let pendingSession = null
-activeTabId = null
 // { promptText, dialogueHistory, userProfile, surveyRound }
 
 function mergeProfile(existing, incoming) { return { ...existing, ...incoming } }
@@ -637,6 +654,43 @@ function sanitizeDialogueHistory(messages)
   let start = 0
   while (start < messages.length && messages[start].role !== 'user') start++
   return messages.slice(start)
+
+// ⚠ MV3-HARDENING: chrome.storage.session (Chrome 102+) persists pendingSession
+// and activeTabId across service worker restarts within the same browser session.
+// In-memory variables are the runtime source of truth; storage is the recovery source.
+//
+// How it works:
+//   saveSessionState()    — call after any write to pendingSession or activeTabId
+//   restoreSessionState() — called at startup inside the criteriasReady IIFE
+//   clearSessionState()   — call instead of `pendingSession = null; activeTabId = null`
+//
+// Known edge case: if onClicked fires before restoreSessionState() resolves (i.e.,
+// before criteriasReady), the in-memory pendingSession is null and the guard allows
+// a new session. The ENHANCE handler then overwrites the stored session — intentional,
+// the user's new click wins. restoreSessionState guards against overwriting an activeTabId
+// set by a concurrent onClicked by checking `if (!activeTabId)` before restoring it.
+//
+// Debugging: if the modal freezes after a browser restart, open DevTools →
+// Application → Storage → chrome.storage.session → inspect "pendingSession".
+// Clear it manually to reset a stuck session.
+
+async function saveSessionState()
+  if (pendingSession) {
+    await chrome.storage.session.set({ pendingSession, activeTabId })
+  }
+
+async function restoreSessionState()
+  const r = await chrome.storage.session.get(['pendingSession', 'activeTabId'])
+  if (r.pendingSession) {
+    pendingSession = r.pendingSession
+    if (!activeTabId) activeTabId = r.activeTabId || null  // don't overwrite if onClicked already set it
+    console.log('[PE background.js] Session restored from storage.session')
+  }
+
+async function clearSessionState()
+  pendingSession = null
+  activeTabId = null
+  await chrome.storage.session.remove(['pendingSession', 'activeTabId'])
 
 ━━━━━━━ EVALUATION ENGINE ━━━━━━━
 
@@ -677,51 +731,51 @@ No prose, no markdown fences, no explanation. Return {} if nothing is clearly in
 async function evaluateProfileSufficiency(promptText, dialogueHistory, userProfile)
   const apiKey = await getApiKey()
   if (!apiKey) {
-  console.warn('[PE background.js] No API key')
-  return { sufficient: true, missingContext: [], roundReason: '' }
-}
+    console.warn('[PE background.js] No API key')
+    return { sufficient: true, missingContext: [], roundReason: '' }
+  }
   const client = new Anthropic({ apiKey })
-  const response = await client.messages.create({
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 300,
-    system: evaluationCriteriaPrompt,
-    messages: [
-      ...sanitizeDialogueHistory(dialogueHistory),
-      { role: 'user', content: JSON.stringify({ promptText, userProfile }) }
-    ]
-  })
   try {
+    const response = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 300,
+      system: evaluationCriteriaPrompt,
+      messages: [
+        ...sanitizeDialogueHistory(dialogueHistory),
+        { role: 'user', content: JSON.stringify({ promptText, userProfile }) }
+      ]
+    })
     return JSON.parse(response.content[0].text)
     // Expected: { sufficient, missingContext, roundReason }
   } catch {
     return { sufficient: true, missingContext: [], roundReason: '' }
-    // Fail-open: never block the user on a parse error
+    // Fail-open: never block the user on a parse or API error
   }
 
 async function generateSurveyQuestions(promptText, dialogueHistory, userProfile, missingContext)
   const apiKey = await getApiKey()
   if (!apiKey) {
-  console.warn('[PE background.js] No API key')
-  return []
-}
+    console.warn('[PE background.js] No API key')
+    return []
+  }
   const client = new Anthropic({ apiKey })
-  const response = await client.messages.create({
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 600,
-    system: evaluationCriteriaPrompt,
-    messages: [
-      ...sanitizeDialogueHistory(dialogueHistory),
-      { role: 'user', content: JSON.stringify({
-          task: 'generate_survey', promptText, userProfile, missingContext
-        })
-      }
-    ]
-  })
   try {
+    const response = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 600,
+      system: evaluationCriteriaPrompt,
+      messages: [
+        ...sanitizeDialogueHistory(dialogueHistory),
+        { role: 'user', content: JSON.stringify({
+            task: 'generate_survey', promptText, userProfile, missingContext
+          })
+        }
+      ]
+    })
     return JSON.parse(response.content[0].text)
     // Expected: [{ question, options }, ...]
   } catch {
-    handleAPIError(new Error('Survey generation parse failed'))
+    handleAPIError(new Error('Survey generation failed'))
     return []
   }
 
@@ -770,8 +824,7 @@ async function advanceLoop(evalResult) {
     const enhanced = result ?? pendingSession.promptText
     const warning = result === null
     sendToContentScript({ type: 'SHOW_RESULT', enhancedPrompt: enhanced, warning, userProfile: pendingSession.userProfile })
-    pendingSession = null
-    activeTabId = null
+    await clearSessionState()
 
   } else {
     const contextToAsk = missingContext.length > 0
@@ -798,8 +851,7 @@ async function advanceLoop(evalResult) {
           warning: result === null,
           userProfile: pendingSession.userProfile
         })
-        pendingSession = null
-        activeTabId = null
+        await clearSessionState()
     return
     }
     sendToContentScript({
@@ -815,11 +867,12 @@ async function advanceLoop(evalResult) {
 ━━━━━━━ MESSAGE-DRIVEN STATE MACHINE ━━━━━━━
 
 chrome.action.onClicked.addListener((tab) => {
+  if (pendingSession) return   // ignore clicks while a session is already in progress
   activeTabId = tab.id
-  setTimeout(() => chrome.tabs.sendMessage(tab.id, { type: 'TRIGGER' }), 100)
+  setTimeout(() => chrome.tabs.sendMessage(tab.id, { type: 'TRIGGER' }), 300)
 })
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, sender) => {
   ;(async () => {
     await criteriasReady
     switch (message.type) {
@@ -832,6 +885,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const seededFields = await seedProfileFromPrompt(promptText)
         const seededProfile = mergeProfile(userProfile, seededFields)
         pendingSession = { promptText, dialogueHistory, userProfile: seededProfile, surveyRound: 0 }
+        await saveSessionState()
         sendToContentScript({ type: 'SHOW_PROGRESS', message: 'Evaluating your prompt...' })
         const evalResult = await evaluateProfileSufficiency(promptText, dialogueHistory, seededProfile)
         await advanceLoop(evalResult)
@@ -843,6 +897,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const mappedProfile = await mapResponsesToProfile(message.rawResponses, pendingSession.promptText)
         pendingSession.userProfile = mergeProfile(pendingSession.userProfile, mappedProfile)
         pendingSession.surveyRound++
+        await saveSessionState()
         sendToContentScript({ type: 'SHOW_PROGRESS', message: 'Checking what we still need...' })
         const evalResult = await evaluateProfileSufficiency(
           pendingSession.promptText,
@@ -854,7 +909,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
     }
   })()
-  return true
 })
 
 After implementing, run: npm run build. Show full output. Fix any errors.
@@ -975,21 +1029,25 @@ Replace the stub enhancePrompt() with:
 async function enhancePrompt(promptText, userProfile, dialogueHistory)
   const apiKey = await getApiKey()
   if (!apiKey) {
-  console.warn('[PE background.js] No API key — cannot enhance')
-  return null
-}
+    console.warn('[PE background.js] No API key — cannot enhance')
+    return null
+  }
   const client = new Anthropic({ apiKey })
-  const response = await client.messages.create({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 1000,
-    system: enhancementCriteriaPrompt,
-    messages: [
-      ...sanitizeDialogueHistory(dialogueHistory),
-      { role: 'user', content: JSON.stringify({ promptText, userProfile }) }
-    ]
-  })
-  return response.content[0].text
-  On any error: handleAPIError(error), return null
+  try {
+    const response = await client.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 1000,
+      system: enhancementCriteriaPrompt,
+      messages: [
+        ...sanitizeDialogueHistory(dialogueHistory),
+        { role: 'user', content: JSON.stringify({ promptText, userProfile }) }
+      ]
+    })
+    return response.content[0].text
+  } catch (error) {
+    handleAPIError(error)
+    return null
+  }
 
 No other changes. Run: npm run build. Show full output.
 ```
@@ -1045,7 +1103,7 @@ Audit in this order:
 5. MESSAGE ROUTING AUDIT
    Trace every type string end-to-end:
      TRIGGER → ENHANCE → SHOW_PROGRESS → SHOW_SURVEY → PROFILE_READY
-     → SHOW_PROGRESS → (loop or) → SHOW_RESULT + INJECT
+     → SHOW_PROGRESS → (loop or) → SHOW_RESULT
    Verify each sender and listener exists, type strings match exactly.
 
 6. INJECTION AUDIT
@@ -1197,7 +1255,6 @@ Return ONLY the enhanced prompt text. Nothing else.
 | background.js | content.js | `SHOW_SURVEY` | `questions, round, roundReason, maxRounds` |
 | content.js | background.js | `PROFILE_READY` | `rawResponses` |
 | background.js | content.js | `SHOW_RESULT` | `enhancedPrompt, warning` |
-| background.js | content.js | `INJECT` | `enhancedPrompt` |
 
 ### Criteria file → API call mapping
 
