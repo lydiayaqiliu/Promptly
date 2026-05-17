@@ -102,6 +102,7 @@ Format each entry inline as: *Title* — Author(s) (if known).
 - Do not rely on a vague prompt and expect the downstream model to interpret intent
 - Do not overload a single prompt with multiple unrelated tasks
 - Do not include meta-commentary in the output ("This prompt uses...", "Note that...")
+- Do not instruct the downstream model to create or save files. Always direct output into the dialogue/chat. Only request a downloadable or file-based output if the user has explicitly asked for one.
 
 ---
 
