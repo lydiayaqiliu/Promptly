@@ -3461,13 +3461,26 @@ No prose, no markdown fences, no explanation. Return {} if nothing is clearly in
     const client = createClient(apiKey);
     const system = `You convert survey question-answer pairs into a canonical user profile JSON object.
 Given a map of question\u2192answer strings and the user's original prompt, return ONLY a compact JSON object.
-Keys must be short camelCase field names (e.g. audience, tone, format, goal, length, gradeLevel).
-Values are the selected answer strings. No prose, no markdown fences, no explanation.
+You MUST use these exact field names as keys \u2014 no synonyms, no abbreviations:
 
-Special rule for readingList:
-- If the answer to a reading-list question is "No" \u2192 set readingList to "None"
-- If the answer is "No, but I need to reference materials." \u2192 set readingList to "NeedsReference"
-- Otherwise (the user typed explicit reading titles) \u2192 set readingList to the verbatim typed text`;
+  educationalLevel      \u2014 academic level (e.g. "undergraduate", "high school", "graduate", "PhD")
+  topicAndDiscipline    \u2014 subject area and academic discipline
+  taskDescription       \u2014 what the user is asked to do
+  outputFormat          \u2014 required output format (e.g. "essay", "short answer", "LaTeX")
+  materials             \u2014 course or topic context (e.g. "Econ 201 \u2014 Intro to Microeconomics")
+  readingList           \u2014 assigned reading titles; "None" if none; "NeedsReference" if user needs to find sources
+  referenceCount        \u2014 number of sources to cite (e.g. "None", "1\u20133", "4\u20136", "7 or more")
+  userStance            \u2014 user's argument or position
+  intentionalErrors     \u2014 "Yes" or "No"
+  referenceRequirements \u2014 citation style or preference
+  audience              \u2014 intended reader
+  knowledgeProfile      \u2014 summary of what the user knows about the topic
+
+Special rules:
+- readingList "No" answer \u2192 "None"; "No, but I need to reference materials." \u2192 "NeedsReference"; typed titles \u2192 verbatim text
+- materials "None \u2014 I have no specific course context" answer \u2192 "None"
+- If an answer does not map to any field above, omit it.
+No prose, no markdown fences, no explanation.`;
     try {
       const response = await client.messages.create({
         model: "claude-haiku-4-5-20251001",
@@ -3520,7 +3533,9 @@ Special rule for readingList:
       sendToContentScript({ type: "SHOW_RESULT", enhancedPrompt: enhanced, warning, userProfile: pendingSession.userProfile });
       await clearSessionState();
     } else {
-      const contextToAsk = missingContext.length > 0 ? missingContext : ["general context about goal and audience"];
+      const profileKeys = new Set(Object.keys(pendingSession.userProfile));
+      const filteredMissing = missingContext.filter((field) => !profileKeys.has(field));
+      const contextToAsk = filteredMissing.length > 0 ? filteredMissing : ["general context about goal and audience"];
       const questions = await generateSurveyQuestions(
         pendingSession.promptText,
         pendingSession.dialogueHistory,

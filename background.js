@@ -207,13 +207,26 @@ async function mapResponsesToProfile(rawResponses, promptText) {
   const client = createClient(apiKey)
   const system = `You convert survey question-answer pairs into a canonical user profile JSON object.
 Given a map of question→answer strings and the user's original prompt, return ONLY a compact JSON object.
-Keys must be short camelCase field names (e.g. audience, tone, format, goal, length, gradeLevel).
-Values are the selected answer strings. No prose, no markdown fences, no explanation.
+You MUST use these exact field names as keys — no synonyms, no abbreviations:
 
-Special rule for readingList:
-- If the answer to a reading-list question is "No" → set readingList to "None"
-- If the answer is "No, but I need to reference materials." → set readingList to "NeedsReference"
-- Otherwise (the user typed explicit reading titles) → set readingList to the verbatim typed text`
+  educationalLevel      — academic level (e.g. "undergraduate", "high school", "graduate", "PhD")
+  topicAndDiscipline    — subject area and academic discipline
+  taskDescription       — what the user is asked to do
+  outputFormat          — required output format (e.g. "essay", "short answer", "LaTeX")
+  materials             — course or topic context (e.g. "Econ 201 — Intro to Microeconomics")
+  readingList           — assigned reading titles; "None" if none; "NeedsReference" if user needs to find sources
+  referenceCount        — number of sources to cite (e.g. "None", "1–3", "4–6", "7 or more")
+  userStance            — user's argument or position
+  intentionalErrors     — "Yes" or "No"
+  referenceRequirements — citation style or preference
+  audience              — intended reader
+  knowledgeProfile      — summary of what the user knows about the topic
+
+Special rules:
+- readingList "No" answer → "None"; "No, but I need to reference materials." → "NeedsReference"; typed titles → verbatim text
+- materials "None — I have no specific course context" answer → "None"
+- If an answer does not map to any field above, omit it.
+No prose, no markdown fences, no explanation.`
   try {
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
@@ -274,8 +287,11 @@ async function advanceLoop(evalResult) {
     await clearSessionState()
 
   } else {
-    const contextToAsk = missingContext.length > 0
-      ? missingContext
+    // Drop fields already captured in userProfile so they are never re-asked
+    const profileKeys = new Set(Object.keys(pendingSession.userProfile))
+    const filteredMissing = missingContext.filter(field => !profileKeys.has(field))
+    const contextToAsk = filteredMissing.length > 0
+      ? filteredMissing
       : ['general context about goal and audience']
     const questions = await generateSurveyQuestions(
       pendingSession.promptText,
