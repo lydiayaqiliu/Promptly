@@ -3323,12 +3323,8 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
   function mergeProfile(existing, incoming) {
     return { ...existing, ...incoming };
   }
-  var _cachedApiKey = null;
   async function getApiKey() {
-    if (!_cachedApiKey) {
-      _cachedApiKey = (await chrome.storage.local.get("anthropicKey")).anthropicKey || null;
-    }
-    return _cachedApiKey;
+    return (await chrome.storage.local.get("anthropicKey")).anthropicKey || null;
   }
   function createClient(apiKey) {
     return new sdk_default({ apiKey, dangerouslyAllowBrowser: true });

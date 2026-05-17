@@ -7,6 +7,24 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
+    <header>✦ Prompt Enhancer — Settings</header>
+
+    <section>
+      <label for="api-key-input">Anthropic API Key</label>
+      <input type="password" id="api-key-input" placeholder="sk-ant-..." autocomplete="off" />
+      <button id="save-key-btn">Save key</button>
+      <span id="key-saved-msg" hidden>Saved ✓</span>
+      <span id="key-error-msg" hidden></span>
+      <p class="hint">Get your key at console.anthropic.com</p>
+    </section>
+
+    <section class="info">
+      <p>Evaluation and enhancement criteria are defined in:</p>
+      <code>evaluation-criteria.md</code><br />
+      <code>enhancement-criteria.md</code>
+      <p>Edit these files and reload the extension to update behavior.</p>
+    </section>
+
     <script src="popup.js"></script>
   </body>
 </html>

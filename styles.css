@@ -1,1 +1,101 @@
-/* popup settings styles — Phase 4 */
+body {
+  max-width: 420px;
+  margin: 0 auto;
+  padding: 28px 24px;
+  font: 14px/1.6 system-ui, sans-serif;
+  background: #0f0f11;
+  color: #e8e8f0;
+}
+
+header {
+  font-size: 15px;
+  font-weight: 500;
+  margin-bottom: 24px;
+  color: #e8e8f0;
+  display: block;
+}
+
+section {
+  margin-bottom: 20px;
+}
+
+label {
+  display: block;
+  font-size: 11px;
+  color: #666;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+input {
+  width: 100%;
+  box-sizing: border-box;
+  background: #1a1a22;
+  border: 1px solid #2a2a3a;
+  color: #e8e8f0;
+  border-radius: 6px;
+  padding: 9px 12px;
+  font-size: 13px;
+  outline: none;
+}
+
+input:focus {
+  border-color: #7c6ef2;
+}
+
+button {
+  margin-top: 8px;
+  background: #7c6ef2;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #6a5de0;
+}
+
+#key-saved-msg {
+  color: #6fcf97;
+  font-size: 12px;
+  margin-left: 10px;
+  vertical-align: middle;
+}
+
+#key-error-msg {
+  color: #ff8080;
+  font-size: 12px;
+  margin-left: 10px;
+  vertical-align: middle;
+}
+
+.hint {
+  color: #444;
+  font-size: 12px;
+  margin-top: 6px;
+}
+
+.info {
+  border-top: 1px solid #1e1e2a;
+  padding-top: 16px;
+}
+
+.info p {
+  color: #555;
+  font-size: 12px;
+  margin: 0 0 6px;
+}
+
+code {
+  display: inline-block;
+  background: #1a1a22;
+  color: #a89ef5;
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-size: 12px;
+  margin-bottom: 4px;
+}

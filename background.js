@@ -36,12 +36,8 @@ function mergeProfile(existing, incoming) { return { ...existing, ...incoming } 
 
 // ━━━━━━━ HELPERS ━━━━━━━
 
-let _cachedApiKey = null
 async function getApiKey() {
-  if (!_cachedApiKey) {
-    _cachedApiKey = (await chrome.storage.local.get('anthropicKey')).anthropicKey || null
-  }
-  return _cachedApiKey
+  return (await chrome.storage.local.get('anthropicKey')).anthropicKey || null
 }
 
 function createClient(apiKey) {
@@ -345,6 +341,7 @@ chrome.runtime.onMessage.addListener((message, sender) => {
         chrome.runtime.openOptionsPage()
         break
       }
+
     }
   })()
 })
