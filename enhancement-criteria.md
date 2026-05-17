@@ -63,6 +63,15 @@ Format each entry inline as: *Title* — Author(s) (if known).
 
 ## What makes a good prompt
 
+### Voice and perspective
+
+**The enhanced prompt must be written from the user's perspective, addressed to an LLM.**
+
+- Use the user's voice: imperative or request form ("Explain…", "Help me…", "Analyse…", "Write…").
+- Address the LLM as "you" when needed — never speak as the LLM.
+- Every sentence should be something a human user would plausibly type into a chat box.
+- If the prompt includes a numbered list of sub-tasks, each item is an instruction TO the LLM, not a description of what the LLM will do.
+
 ### Structure
 
 - Prompt is self-contained (no external context needed)
@@ -101,6 +110,7 @@ Format each entry inline as: *Title* — Author(s) (if known).
 
 ### What NOT to do
 - **Do NOT produce the answer.** Never write a study note, essay, explanation, solution, outline, or any other deliverable — that is the downstream LLM's job. If you catch yourself writing content that answers the user's task, stop and rewrite as instructions.
+- **Do NOT write from the LLM's perspective.** Never use first-person LLM voice. Phrases like "I will…", "Here is what I'll cover:", "I'll walk you through…" mean you have adopted the LLM's voice and are writing a response, not a prompt. Rewrite every such sentence as a user instruction ("Walk me through…", "Cover the following:", "Once I share X, explain…").
 - Do not change what the task is — only improve HOW it is asked
 - Do not add personal facts that were not in the user profile
 - Do not add preamble to the enhanced prompt itself

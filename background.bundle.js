@@ -3356,7 +3356,12 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
       return JSON.parse(stripped);
     } catch {
       const match = stripped.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
-      if (match) return JSON.parse(match[1]);
+      if (match) {
+        try {
+          return JSON.parse(match[1]);
+        } catch {
+        }
+      }
       throw new SyntaxError("No JSON found in LLM response");
     }
   }
@@ -3379,6 +3384,7 @@ Possible fields (all optional):
   educationalLevel    string  \u2014 e.g. "high school", "undergraduate", "graduate"
   topicAndDiscipline  string  \u2014 subject area and discipline
   outputFormat        string  \u2014 e.g. "essay", "LaTeX", "short answer", "paper with references"
+  materials           string  \u2014 course or topic context if explicitly stated (e.g. "Econ 201", "AP Biology"); omit if not mentioned
   audience            string  \u2014 intended reader, if mentioned
   length              string  \u2014 length or page count, if mentioned
   referenceRequirements string \u2014 citation style or "no references", if mentioned
@@ -3411,14 +3417,15 @@ No prose, no markdown fences, no explanation. Return {} if nothing is clearly in
     try {
       const response = await client.messages.create({
         model: "claude-haiku-4-5-20251001",
-        max_tokens: 300,
+        max_tokens: 500,
         system: evaluationCriteriaPrompt,
         messages: [
           ...sanitizeDialogueHistory(dialogueHistory),
-          { role: "user", content: JSON.stringify({ promptText, userProfile }) }
+          { role: "user", content: JSON.stringify({ promptText, userProfile }) },
+          { role: "assistant", content: "{" }
         ]
       });
-      return parseJSON(response.content[0].text);
+      return parseJSON("{" + response.content[0].text);
     } catch (e) {
       console.warn("[PE background.js] evaluateProfileSufficiency error:", e);
       return { sufficient: true, missingContext: [], roundReason: "" };
@@ -3434,7 +3441,7 @@ No prose, no markdown fences, no explanation. Return {} if nothing is clearly in
     try {
       const response = await client.messages.create({
         model: "claude-haiku-4-5-20251001",
-        max_tokens: 600,
+        max_tokens: 1e3,
         system: evaluationCriteriaPrompt,
         messages: [
           ...sanitizeDialogueHistory(dialogueHistory),
@@ -3446,10 +3453,11 @@ No prose, no markdown fences, no explanation. Return {} if nothing is clearly in
               userProfile,
               missingContext
             })
-          }
+          },
+          { role: "assistant", content: "[" }
         ]
       });
-      return parseJSON(response.content[0].text);
+      return parseJSON("[" + response.content[0].text);
     } catch (e) {
       console.error("[PE background.js] API error:", e);
       return [];
@@ -3486,12 +3494,15 @@ No prose, no markdown fences, no explanation.`;
         model: "claude-haiku-4-5-20251001",
         max_tokens: 300,
         system,
-        messages: [{ role: "user", content: JSON.stringify({ responses: rawResponses, promptText }) }]
+        messages: [
+          { role: "user", content: JSON.stringify({ responses: rawResponses, promptText }) },
+          { role: "assistant", content: "{" }
+        ]
       });
-      return parseJSON(response.content[0].text);
+      return parseJSON("{" + response.content[0].text);
     } catch (e) {
-      console.warn("[PE background.js] mapResponsesToProfile failed \u2014 using raw responses:", e);
-      return rawResponses;
+      console.warn("[PE background.js] mapResponsesToProfile failed \u2014 discarding responses to avoid profile corruption:", e);
+      return {};
     }
   }
   async function enhancePrompt(promptText, userProfile, dialogueHistory) {
@@ -3516,48 +3527,43 @@ No prose, no markdown fences, no explanation.`;
       return null;
     }
   }
+  async function runEnhance() {
+    if (!pendingSession) return;
+    sendToContentScript({ type: "SHOW_PROGRESS", message: "Enhancing your prompt..." });
+    const result = await enhancePrompt(
+      pendingSession.promptText,
+      pendingSession.userProfile,
+      pendingSession.dialogueHistory
+    );
+    const enhanced = result ?? pendingSession.promptText;
+    const warning = result === null;
+    sendToContentScript({ type: "SHOW_RESULT", enhancedPrompt: enhanced, warning, userProfile: pendingSession.userProfile });
+    await clearSessionState();
+  }
   async function advanceLoop(evalResult) {
+    if (!pendingSession) return;
     const { sufficient, missingContext, roundReason } = evalResult;
     const meetsMin = pendingSession.surveyRound >= criteria.minRounds;
     const hitMax = pendingSession.surveyRound >= criteria.maxRounds;
     const shouldEnhance = sufficient && meetsMin || hitMax;
     if (shouldEnhance) {
-      sendToContentScript({ type: "SHOW_PROGRESS", message: "Enhancing your prompt..." });
-      const result = await enhancePrompt(
-        pendingSession.promptText,
-        pendingSession.userProfile,
-        pendingSession.dialogueHistory
-      );
-      const enhanced = result ?? pendingSession.promptText;
-      const warning = result === null;
-      sendToContentScript({ type: "SHOW_RESULT", enhancedPrompt: enhanced, warning, userProfile: pendingSession.userProfile });
-      await clearSessionState();
+      await runEnhance();
     } else {
       const profileKeys = new Set(Object.keys(pendingSession.userProfile));
       const filteredMissing = missingContext.filter((field) => !profileKeys.has(field));
-      const contextToAsk = filteredMissing.length > 0 ? filteredMissing : ["general context about goal and audience"];
+      if (filteredMissing.length === 0) {
+        await runEnhance();
+        return;
+      }
       const questions = await generateSurveyQuestions(
         pendingSession.promptText,
         pendingSession.dialogueHistory,
         pendingSession.userProfile,
-        contextToAsk
+        filteredMissing
       );
       if (!questions || questions.length === 0) {
         console.warn("[PE background.js] No questions generated \u2014 forcing enhance");
-        sendToContentScript({ type: "SHOW_PROGRESS", message: "Enhancing your prompt..." });
-        const result = await enhancePrompt(
-          pendingSession.promptText,
-          pendingSession.userProfile,
-          pendingSession.dialogueHistory
-        );
-        const enhanced = result ?? pendingSession.promptText;
-        sendToContentScript({
-          type: "SHOW_RESULT",
-          enhancedPrompt: enhanced,
-          warning: result === null,
-          userProfile: pendingSession.userProfile
-        });
-        await clearSessionState();
+        await runEnhance();
         return;
       }
       sendToContentScript({
@@ -3615,6 +3621,10 @@ No prose, no markdown fences, no explanation.`;
           );
           console.log("[PE background.js] evalResult:", evalResult);
           await advanceLoop(evalResult);
+          break;
+        }
+        case "CANCEL_SESSION": {
+          await clearSessionState();
           break;
         }
         case "OPEN_SETTINGS": {

@@ -63,6 +63,12 @@ function detectInputField() {
   if (active && (active.tagName === 'TEXTAREA' || active.contentEditable === 'true')) {
     return active;
   }
+  // Use host-specific chatInput selector from cached selectors (populated by scrapePreviousDialogue)
+  const hostSelectors = _selectorsCache && _selectorsCache[window.location.hostname];
+  if (hostSelectors && hostSelectors.chatInput) {
+    const el = document.querySelector(hostSelectors.chatInput);
+    if (el) return el;
+  }
   return (
     document.querySelector('#prompt-textarea') ||
     document.querySelector("div[contenteditable='true']") ||
@@ -359,6 +365,7 @@ function openModal() {
 function closeModal() {
   const el = document.getElementById('pe-overlay');
   if (el) el.hidden = true;
+  chrome.runtime.sendMessage({ type: 'CANCEL_SESSION' }).catch(() => {});
 }
 
 function showModalSection(id) {
@@ -425,13 +432,15 @@ function renderSurvey(questions, round, roundReason, maxRounds) {
       pill.dataset.qi = qi;
       pill.dataset.value = opt;
       pill.addEventListener('click', () => {
-        opts.querySelectorAll('.pe-option').forEach(p => p.classList.remove('pe-selected'));
-        pill.classList.add('pe-selected');
+        pill.classList.toggle('pe-selected');
         if (freeInput) {
-          const isFreeText = opt.includes(' — ');
-          freeInput.style.display = isFreeText ? 'block' : 'none';
-          if (isFreeText) {
-            freeInput.placeholder = 'Input your text here';
+          const anyFreeTextSelected = Array.from(opts.querySelectorAll('.pe-option.pe-selected'))
+            .some(p => p.dataset.value.includes(' — '));
+          freeInput.style.display = anyFreeTextSelected ? 'block' : 'none';
+          if (anyFreeTextSelected) {
+            const firstFreeText = Array.from(opts.querySelectorAll('.pe-option.pe-selected'))
+              .find(p => p.dataset.value.includes(' — '));
+            freeInput.placeholder = firstFreeText.dataset.value.split(' — ')[1] || 'Your answer...';
             freeInput.focus();
           }
         }
@@ -461,15 +470,20 @@ function renderSurvey(questions, round, roundReason, maxRounds) {
 function collectModalResponses() {
   const responses = {};
   currentQuestions.forEach((q, qi) => {
-    const sel = document.querySelector('.pe-option.pe-selected[data-qi="' + qi + '"]');
+    const selectedPills = Array.from(document.querySelectorAll('.pe-option.pe-selected[data-qi="' + qi + '"]'));
     const openInput = document.querySelector('.pe-open-input[data-qi="' + qi + '"]');
-    if (sel) {
-      const isFreeText = sel.dataset.value.includes(' — ');
-      if (isFreeText && openInput && openInput.value.trim()) {
-        responses[q.question] = openInput.value.trim();
-      } else {
-        responses[q.question] = sel.dataset.value;
-      }
+    if (selectedPills.length > 0) {
+      const values = [];
+      selectedPills.forEach(pill => {
+        const isFreeText = pill.dataset.value.includes(' — ');
+        if (isFreeText) {
+          // Replace the pill label with the user's typed text; skip if empty
+          if (openInput && openInput.value.trim()) values.push(openInput.value.trim());
+        } else {
+          values.push(pill.dataset.value);
+        }
+      });
+      if (values.length > 0) responses[q.question] = values.join(', ');
     } else if (openInput && openInput.value.trim()) {
       // Pure open-ended question (no pills)
       responses[q.question] = openInput.value.trim();
