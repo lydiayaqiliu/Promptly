@@ -62,8 +62,8 @@ hallucinating or making ungrounded assumptions.
 - **taskDescription** — A clear description of what the user is asked to do. Seed from `promptText` if absent.
 - **outputFormat** — Required output format (e.g., LaTeX, essay, paper with references, short answer)
 - **taskType** — Inferred by the evaluator from taskDescription. Never supplied by the user. See inference rules.
-- **materials** — Source materials the user has available (syllabus, lecture notes, textbook chapters). "None" is valid and triggers the probe pipeline.
-- **readingList** — The assigned or recommended reading list for the task (e.g., specific papers, book chapters, articles). "None" is valid.
+- **materials** — A short description of the course or topic this task is for (e.g., "Intro to Macroeconomics", "AP Biology — cell division unit", "corporate finance elective"). One or two sentences maximum. "None" is valid and triggers the probe pipeline.
+- **readingList** — The explicit names of assigned or recommended readings for the task (e.g., full paper titles, book chapter names, article titles). Must be specific titles, not generic descriptions. "None" is valid. "NeedsReference" is valid when the user has no assigned list but intends to find reference materials independently.
 - **referenceCount** — The number of sources the user is required (or intends) to cite in the output. "None" is valid when no references are needed. Required independently of `referenceRequirements`.
 - **userStance** — For open-ended or combined tasks: the user's argument, position, or perspective. "I don't know" is valid and triggers auto-assignment.
 - **intentionalErrors** — For factual tasks: whether any answers should be deliberately wrong. "No" is a valid answer.
@@ -83,16 +83,20 @@ When in doubt between open-ended and combined, default to **combined** — it ap
 
 ### Sufficiency rules
 
+**Presence rule (critical):** "Present" means the field exists as a key in `userProfile` with an explicit value — including "None". Do NOT infer or assume a field's value from `promptText` alone. If a field is absent from `userProfile`, it is ALWAYS missing — even if its value seems obvious from the prompt. The only exception is `taskDescription`, which may be seeded from `promptText` per the mapping rule above.
+
+This rule is especially strict for `readingList`, `referenceCount`, `materials`, and `referenceRequirements`: these four fields must never be satisfied by inference. If they are absent from `userProfile`, add them to `missingContext` unconditionally.
+
 - `educationalLevel`, `topicAndDiscipline`, `taskDescription`, and `outputFormat` must always be present → if any are missing: insufficient
 - `taskType` must be inferrable from `taskDescription` → if too vague to classify: insufficient
-- `materials` must always be present; "None" is accepted but triggers the probe pipeline → profile is not sufficient until probe results populate `knowledgeProfile`
-- `readingList` must always be present; "None" is accepted
-- `referenceCount` must always be present; "None" is accepted when no references are required
+- `materials` must be explicitly present in `userProfile`; "None" is accepted only when the user set it — if absent, always add to `missingContext`; "None" (or a description too vague to infer any domain knowledge) triggers the probe pipeline only when `taskType` is factual or combined → profile is not sufficient until probe results populate `knowledgeProfile`; for open-ended tasks, "None" is accepted without triggering the probe
+- `readingList` must be explicitly present in `userProfile`; "None" is accepted only when the user set it — if absent, always add to `missingContext`
+- `referenceCount` must be explicitly present in `userProfile`; "None" is accepted only when the user set it — if absent, always add to `missingContext`
 - If `taskType` is open-ended or combined → `userStance` must be present; if "I don't know", auto-assign a stance and set `stanceAutoAssigned: true`
-- If `outputFormat` requires citations → `referenceRequirements` must be present
+- If `outputFormat` requires citations → `referenceRequirements` must be explicitly present in `userProfile`; if absent, always add to `missingContext`
 - If the task implies a specific target reader → `audience` must be present
 - If `taskType` is combined → decompose into open-ended and factual subtasks, apply both rule sets
-- If `materials` is "None" → `knowledgeProfile` must be present → if missing, set `knowledgeLevelProbeRequired: true` AND add `"knowledgeProfile"` to `missingContext`
+- If `materials` is "None" AND `taskType` is factual or combined → `knowledgeProfile` must be present → if missing, set `knowledgeLevelProbeRequired: true` AND add `"knowledgeProfile"` to `missingContext`; do NOT set `knowledgeLevelProbeRequired` for open-ended tasks
 
 ### D&Q (Decompose and Query) check
 
@@ -132,13 +136,15 @@ Generate questions to collect the missing profile information.
 
 ### Rules
 
-- **ALL questions MUST be MCQ.** There are no open-ended questions. Every question must have 3–4 substantive option strings, with the final option always being `"Other — [short contextual prompt, e.g. 'describe your reading list here']"` as a free-text escape hatch.
+- **ALL questions MUST be MCQ.** There are no open-ended questions. Every question must have 3–4 substantive option strings, with the final option always being `"Other — [short contextual prompt, e.g. 'describe your answer here']"` as a free-text escape hatch.
+- **Free-text input convention:** Any option that requires the user to type a value must use the format `"Label — instructional prompt"` (label, space, em dash, space, short prompt). The UI detects the ` — ` separator and automatically shows a text input box when that option is selected. The user's typed text is stored as the answer. Use this convention for both "Other — ..." escape hatches and any "Yes — ..." options that collect structured input (e.g., reading lists). Options that do NOT need typed input (e.g., `"No"`, `"None"`, `"1–3"`) must NOT contain ` — `.
 - Generate one question per item in `missingContext`, up to **5 questions total**
 - If `missingContext` has more than 5 items, select 5 at random; the rest will be addressed in later rounds
 - Never ask about fields already present in `userProfile`, except `knowledgeProfile`
 - Write neutral question text — never reference "the following choices" or "which of these" unless the options are actually enumerated in `options`
 - If `missingContext` includes `userStance` and the user previously said "I don't know" — do NOT ask again; auto-assign a stance and note it in the question's options
-- If `missingContext` includes `readingList` — infer 2–3 plausible readings from `topicAndDiscipline` and `taskDescription` as options; final option must be `"Other — list your assigned readings here"`
+- If `missingContext` includes `materials` — ask `"What course or topic is this for?"` with options: `"Describe your course or topic — keep it to 1–2 sentences"` (free-text input), `"None — I have no specific course context"`. Do NOT ask about documents, syllabi, or lecture notes. Store the typed description verbatim as `materials`; store `"None"` for the second option.
+- If `missingContext` includes `readingList` — ask `"Do you have a reading list?"` with exactly three options: `"Yes — enter your reading list here"` (free-text, triggers an FRQ input box for the user to type explicit reading titles), `"No"`, `"No, but I need to reference materials."`. Do NOT infer plausible readings as options. Store the user's typed titles verbatim as `readingList`; store `"None"` for "No"; store `"NeedsReference"` for the third option.
 - If `missingContext` includes `referenceCount` — use options: `"None"`, `"1–3"`, `"4–6"`, `"7 or more"`. No "Other" needed here since the set is exhaustive.
 - If `"knowledgeProfile"` appears in `missingContext`, generate knowledge probe questions derived from `topicAndDiscipline`, `taskDescription`, and `educationalLevel`:
   - Identify the specific knowledge dimensions the task requires (e.g., which mathematical operations, which historical periods, which biological mechanisms)

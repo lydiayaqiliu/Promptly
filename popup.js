@@ -3,6 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (r.anthropicKey) {
       document.getElementById('api-key-input').placeholder =
         '••••••••' + r.anthropicKey.slice(-4)
+      document.getElementById('remove-key-btn').hidden = false
     }
   })
 
@@ -23,6 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
       input.value = ''
       input.placeholder = '••••••••' + key.slice(-4)
       document.getElementById('key-error-msg').hidden = true
+      document.getElementById('remove-key-btn').hidden = false
       const msg = document.getElementById('key-saved-msg')
       msg.hidden = false
       setTimeout(() => { msg.hidden = true }, 2000)
@@ -33,5 +35,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('api-key-input').addEventListener('keydown', e => {
     if (e.key === 'Enter') attemptSave()
+  })
+
+  document.getElementById('remove-key-btn').addEventListener('click', () => {
+    chrome.storage.local.remove('anthropicKey', () => {
+      const input = document.getElementById('api-key-input')
+      input.value = ''
+      input.placeholder = 'sk-ant-...'
+      document.getElementById('remove-key-btn').hidden = true
+      const msg = document.getElementById('key-removed-msg')
+      msg.hidden = false
+      setTimeout(() => { msg.hidden = true }, 2000)
+    })
   })
 })

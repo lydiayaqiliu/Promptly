@@ -3383,7 +3383,7 @@ Possible fields (all optional):
   length              string  \u2014 length or page count, if mentioned
   referenceRequirements string \u2014 citation style or "no references", if mentioned
   referenceCount      string  \u2014 number of sources required, e.g. "3", "5\u20137", "None", if mentioned
-  readingList         string  \u2014 assigned or recommended readings, if listed in the prompt
+  readingList         string  \u2014 explicit titles of assigned or recommended readings listed in the prompt (e.g. full paper titles, book chapter names); omit if no specific titles are mentioned
   userStance          string  \u2014 user's argument or position, if stated
   intentionalErrors   string  \u2014 "Yes" or "No", only if explicitly mentioned
 
@@ -3462,7 +3462,12 @@ No prose, no markdown fences, no explanation. Return {} if nothing is clearly in
     const system = `You convert survey question-answer pairs into a canonical user profile JSON object.
 Given a map of question\u2192answer strings and the user's original prompt, return ONLY a compact JSON object.
 Keys must be short camelCase field names (e.g. audience, tone, format, goal, length, gradeLevel).
-Values are the selected answer strings. No prose, no markdown fences, no explanation.`;
+Values are the selected answer strings. No prose, no markdown fences, no explanation.
+
+Special rule for readingList:
+- If the answer to a reading-list question is "No" \u2192 set readingList to "None"
+- If the answer is "No, but I need to reference materials." \u2192 set readingList to "NeedsReference"
+- Otherwise (the user typed explicit reading titles) \u2192 set readingList to the verbatim typed text`;
     try {
       const response = await client.messages.create({
         model: "claude-haiku-4-5-20251001",
@@ -3486,7 +3491,7 @@ Values are the selected answer strings. No prose, no markdown fences, no explana
     try {
       const response = await client.messages.create({
         model: "claude-sonnet-4-6",
-        max_tokens: 1e3,
+        max_tokens: 4096,
         system: enhancementCriteriaPrompt,
         messages: [
           { role: "user", content: JSON.stringify({ promptText, userProfile, dialogueHistory }) }
@@ -3552,7 +3557,8 @@ Values are the selected answer strings. No prose, no markdown fences, no explana
   chrome.action.onClicked.addListener((tab) => {
     if (pendingSession) return;
     activeTabId = tab.id;
-    setTimeout(() => chrome.tabs.sendMessage(tab.id, { type: "TRIGGER" }), 300);
+    setTimeout(() => chrome.tabs.sendMessage(tab.id, { type: "TRIGGER" }).catch(() => {
+    }), 300);
   });
   chrome.runtime.onMessage.addListener((message) => {
     ;
@@ -3561,6 +3567,11 @@ Values are the selected answer strings. No prose, no markdown fences, no explana
       switch (message.type) {
         case "ENHANCE": {
           const { promptText, dialogueHistory, userProfile } = message;
+          const apiKey = await getApiKey();
+          if (!apiKey) {
+            sendToContentScript({ type: "SHOW_ERROR", message: "No API key set. Click the three vertical dots (More options) next to this extension, then click Options, and add your Anthropic API key." });
+            return;
+          }
           sendToContentScript({ type: "SHOW_PROGRESS", message: "Reading your prompt..." });
           const seededFields = await seedProfileFromPrompt(promptText);
           const seededProfile = mergeProfile(userProfile, seededFields);
@@ -3596,6 +3607,6 @@ Values are the selected answer strings. No prose, no markdown fences, no explana
           break;
         }
       }
-    })();
+    })().catch((e) => console.error("[PE background.js] unhandled error in message handler:", e));
   });
 })();

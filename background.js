@@ -127,7 +127,7 @@ Possible fields (all optional):
   length              string  — length or page count, if mentioned
   referenceRequirements string — citation style or "no references", if mentioned
   referenceCount      string  — number of sources required, e.g. "3", "5–7", "None", if mentioned
-  readingList         string  — assigned or recommended readings, if listed in the prompt
+  readingList         string  — explicit titles of assigned or recommended readings listed in the prompt (e.g. full paper titles, book chapter names); omit if no specific titles are mentioned
   userStance          string  — user's argument or position, if stated
   intentionalErrors   string  — "Yes" or "No", only if explicitly mentioned
 
@@ -208,7 +208,12 @@ async function mapResponsesToProfile(rawResponses, promptText) {
   const system = `You convert survey question-answer pairs into a canonical user profile JSON object.
 Given a map of question→answer strings and the user's original prompt, return ONLY a compact JSON object.
 Keys must be short camelCase field names (e.g. audience, tone, format, goal, length, gradeLevel).
-Values are the selected answer strings. No prose, no markdown fences, no explanation.`
+Values are the selected answer strings. No prose, no markdown fences, no explanation.
+
+Special rule for readingList:
+- If the answer to a reading-list question is "No" → set readingList to "None"
+- If the answer is "No, but I need to reference materials." → set readingList to "NeedsReference"
+- Otherwise (the user typed explicit reading titles) → set readingList to the verbatim typed text`
   try {
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
@@ -235,7 +240,7 @@ async function enhancePrompt(promptText, userProfile, dialogueHistory) {
   try {
     const response = await client.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 1000,
+      max_tokens: 4096,
       system: enhancementCriteriaPrompt,
       messages: [
         { role: 'user', content: JSON.stringify({ promptText, userProfile, dialogueHistory }) }
@@ -311,7 +316,7 @@ async function advanceLoop(evalResult) {
 chrome.action.onClicked.addListener((tab) => {
   if (pendingSession) return
   activeTabId = tab.id
-  setTimeout(() => chrome.tabs.sendMessage(tab.id, { type: 'TRIGGER' }), 300)
+  setTimeout(() => chrome.tabs.sendMessage(tab.id, { type: 'TRIGGER' }).catch(() => {}), 300)
 })
 
 chrome.runtime.onMessage.addListener((message) => {
@@ -321,6 +326,11 @@ chrome.runtime.onMessage.addListener((message) => {
 
       case 'ENHANCE': {
         const { promptText, dialogueHistory, userProfile } = message
+        const apiKey = await getApiKey()
+        if (!apiKey) {
+          sendToContentScript({ type: 'SHOW_ERROR', message: 'No API key set. Click the three vertical dots (More options) next to this extension, then click Options, and add your Anthropic API key.' })
+          return
+        }
         sendToContentScript({ type: 'SHOW_PROGRESS', message: 'Reading your prompt...' })
         const seededFields = await seedProfileFromPrompt(promptText)
         const seededProfile = mergeProfile(userProfile, seededFields)
@@ -356,5 +366,5 @@ chrome.runtime.onMessage.addListener((message) => {
       }
 
     }
-  })()
+  })().catch(e => console.error('[PE background.js] unhandled error in message handler:', e))
 })

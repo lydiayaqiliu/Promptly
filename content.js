@@ -404,19 +404,18 @@ function renderSurvey(questions, round, roundReason, maxRounds) {
     opts.className = 'pe-options';
 
     const options = q.options || [];
-    const lastOpt = options[options.length - 1] || '';
-    const hasOther = lastOpt.startsWith('Other');
 
-    // Pre-create the "Other" text input (hidden until that pill is clicked)
-    let otherInput = null;
-    if (hasOther) {
-      otherInput = document.createElement('input');
-      otherInput.type = 'text';
-      otherInput.className = 'pe-open-input';
-      otherInput.dataset.qi = qi;
-      otherInput.placeholder = lastOpt.replace(/^Other\s*[—–-]\s*/i, '') || 'Your answer...';
-      otherInput.style.display = 'none';
-      otherInput.style.marginTop = '8px';
+    // Any option using the "Label — instructional prompt" convention triggers a free-text input.
+    // This covers both "Yes — enter your reading list here" and "Other — describe here" forms.
+    const hasFreeText = options.some(o => o.includes(' — '));
+    let freeInput = null;
+    if (hasFreeText) {
+      freeInput = document.createElement('input');
+      freeInput.type = 'text';
+      freeInput.className = 'pe-open-input';
+      freeInput.dataset.qi = qi;
+      freeInput.style.display = 'none';
+      freeInput.style.marginTop = '8px';
     }
 
     options.forEach(opt => {
@@ -428,16 +427,19 @@ function renderSurvey(questions, round, roundReason, maxRounds) {
       pill.addEventListener('click', () => {
         opts.querySelectorAll('.pe-option').forEach(p => p.classList.remove('pe-selected'));
         pill.classList.add('pe-selected');
-        if (otherInput) {
-          const showing = opt.startsWith('Other');
-          otherInput.style.display = showing ? 'block' : 'none';
-          if (showing) otherInput.focus();
+        if (freeInput) {
+          const isFreeText = opt.includes(' — ');
+          freeInput.style.display = isFreeText ? 'block' : 'none';
+          if (isFreeText) {
+            freeInput.placeholder = 'Input your text here';
+            freeInput.focus();
+          }
         }
       });
       opts.appendChild(pill);
     });
 
-    if (otherInput) opts.appendChild(otherInput);
+    if (freeInput) opts.appendChild(freeInput);
 
     // Fallback for legacy open-ended questions with no options at all
     if (options.length === 0) {
@@ -462,8 +464,8 @@ function collectModalResponses() {
     const sel = document.querySelector('.pe-option.pe-selected[data-qi="' + qi + '"]');
     const openInput = document.querySelector('.pe-open-input[data-qi="' + qi + '"]');
     if (sel) {
-      const isOther = sel.dataset.value.startsWith('Other');
-      if (isOther && openInput && openInput.value.trim()) {
+      const isFreeText = sel.dataset.value.includes(' — ');
+      if (isFreeText && openInput && openInput.value.trim()) {
         responses[q.question] = openInput.value.trim();
       } else {
         responses[q.question] = sel.dataset.value;
@@ -527,6 +529,10 @@ chrome.runtime.onMessage.addListener((message) => {
         .catch(err => console.error('[PE content.js] TRIGGER setup failed:', err));
       break;
     }
+
+    case 'SHOW_ERROR':
+      showModalError(message.message);
+      break;
 
     case 'SHOW_PROGRESS':
       showModalProgress(message.message);

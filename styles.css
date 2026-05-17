@@ -59,7 +59,7 @@ button:hover {
   background: #6a5de0;
 }
 
-#key-saved-msg {
+#key-saved-msg, #key-removed-msg {
   color: #6fcf97;
   font-size: 12px;
   margin-left: 10px;
@@ -71,6 +71,17 @@ button:hover {
   font-size: 12px;
   margin-left: 10px;
   vertical-align: middle;
+}
+
+#remove-key-btn {
+  margin-left: 6px;
+  background: transparent;
+  color: #ff8080;
+  border: 1px solid #5a2a2a;
+}
+
+#remove-key-btn:hover {
+  background: #3a1a1a;
 }
 
 .hint {
