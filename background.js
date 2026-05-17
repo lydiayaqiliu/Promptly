@@ -36,8 +36,16 @@ function mergeProfile(existing, incoming) { return { ...existing, ...incoming } 
 
 // ━━━━━━━ HELPERS ━━━━━━━
 
+let _cachedApiKey = null
 async function getApiKey() {
-  return chrome.storage.local.get('anthropicKey').then(r => r.anthropicKey)
+  if (!_cachedApiKey) {
+    _cachedApiKey = (await chrome.storage.local.get('anthropicKey')).anthropicKey || null
+  }
+  return _cachedApiKey
+}
+
+function createClient(apiKey) {
+  return new Anthropic({ apiKey, dangerouslyAllowBrowser: true })
 }
 
 function handleAPIError(error) {
@@ -113,7 +121,7 @@ async function clearSessionState() {
 async function seedProfileFromPrompt(promptText) {
   const apiKey = await getApiKey()
   if (!apiKey) return {}
-  const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true })
+  const client = createClient(apiKey)
   const system = `You extract structured profile fields from a user's raw prompt text.
 Return ONLY a compact JSON object containing fields you can confidently infer.
 Only include fields with clear evidence in the prompt — do not guess or hallucinate.
@@ -151,7 +159,7 @@ async function evaluateProfileSufficiency(promptText, dialogueHistory, userProfi
     console.warn('[PE background.js] No API key')
     return { sufficient: true, missingContext: [], roundReason: '' }
   }
-  const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true })
+  const client = createClient(apiKey)
   try {
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
@@ -177,7 +185,7 @@ async function generateSurveyQuestions(promptText, dialogueHistory, userProfile,
     console.warn('[PE background.js] No API key')
     return []
   }
-  const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true })
+  const client = createClient(apiKey)
   try {
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
@@ -203,7 +211,7 @@ async function generateSurveyQuestions(promptText, dialogueHistory, userProfile,
 async function mapResponsesToProfile(rawResponses, promptText) {
   const apiKey = await getApiKey()
   if (!apiKey) return rawResponses
-  const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true })
+  const client = createClient(apiKey)
   const system = `You convert survey question-answer pairs into a canonical user profile JSON object.
 Given a map of question→answer strings and the user's original prompt, return ONLY a compact JSON object.
 Keys must be short camelCase field names (e.g. audience, tone, format, goal, length, gradeLevel).
@@ -216,8 +224,8 @@ Values are the selected answer strings. No prose, no markdown fences, no explana
       messages: [{ role: 'user', content: JSON.stringify({ responses: rawResponses, promptText }) }]
     })
     return parseJSON(response.content[0].text)
-  } catch {
-    console.warn('[PE background.js] mapResponsesToProfile failed — using raw responses')
+  } catch (e) {
+    console.warn('[PE background.js] mapResponsesToProfile failed — using raw responses:', e)
     return rawResponses
   }
 }

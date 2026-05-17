@@ -73,7 +73,7 @@ function detectInputField() {
 function captureUserPrompt() {
   const el = detectInputField();
   if (!el) return '';
-  return el.value !== undefined ? el.value : (el.innerText || '');
+  return el.tagName === 'TEXTAREA' ? el.value : (el.innerText || '');
 }
 
 function injectEnhancedPrompt(text) {
@@ -98,14 +98,6 @@ function injectEnhancedPrompt(text) {
   el.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
-function saveProfile(profile) {
-  chrome.storage.local.set({ userProfile: profile });
-}
-
-async function loadProfile() {
-  const r = await chrome.storage.local.get('userProfile');
-  return r.userProfile || {};
-}
 
 // ── Section 2: Floating Modal ─────────────────────────────────────────────────
 
@@ -282,6 +274,14 @@ const MODAL_CSS = `
     font-size: 12px;
     margin-top: 6px;
   }
+  #pe-submit-error {
+    color: #ff8080;
+    font-size: 12px;
+    text-align: center;
+    margin: 6px 0 0;
+  }
+  #pe-error { text-align: center; padding: 16px 0; }
+  #pe-error-msg { color: #ff8080; font-size: 13px; margin: 0; }
 `;
 
 function injectModalStyles() {
@@ -314,6 +314,11 @@ function createModal() {
         <p id="pe-round-reason"></p>
         <div id="pe-questions"></div>
         <button id="pe-submit">Continue →</button>
+        <p id="pe-submit-error" hidden>Please answer at least one question.</p>
+      </div>
+
+      <div id="pe-error" hidden>
+        <p id="pe-error-msg"></p>
       </div>
 
       <div id="pe-result" hidden>
@@ -350,9 +355,15 @@ function closeModal() {
 }
 
 function showModalSection(id) {
-  ['pe-progress', 'pe-survey', 'pe-result'].forEach(sectionId => {
+  ['pe-progress', 'pe-survey', 'pe-result', 'pe-error'].forEach(sectionId => {
     document.getElementById(sectionId).hidden = (sectionId !== id);
   });
+}
+
+function showModalError(message) {
+  openModal();
+  document.getElementById('pe-error-msg').textContent = message;
+  showModalSection('pe-error');
 }
 
 function showModalProgress(message) {
@@ -366,6 +377,7 @@ let currentQuestions = [];
 function renderSurvey(questions, round, roundReason, maxRounds) {
   currentQuestions = questions;
   openModal();
+  document.getElementById('pe-submit-error').hidden = true;
   document.getElementById('pe-round-badge').textContent = 'Round ' + round + ' of ' + maxRounds;
   document.getElementById('pe-round-reason').textContent = roundReason;
 
@@ -426,15 +438,17 @@ function collectModalResponses() {
 
 function handleSurveySubmit() {
   const rawResponses = collectModalResponses();
-  if (Object.keys(rawResponses).length === 0) return;
+  if (Object.keys(rawResponses).length === 0) {
+    document.getElementById('pe-submit-error').hidden = false;
+    return;
+  }
   chrome.runtime.sendMessage({ type: 'PROFILE_READY', rawResponses }).catch(() => {});
   showModalProgress('Checking what we still need...');
 }
 
-function showModalResult(enhancedPrompt, warning, mergedProfile) {
+function showModalResult(enhancedPrompt, warning) {
   document.getElementById('pe-result-text').value = enhancedPrompt;
   document.getElementById('pe-warning').hidden = !warning;
-  if (mergedProfile) saveProfile(mergedProfile);
   openModal();
   showModalSection('pe-result');
 }
@@ -460,6 +474,10 @@ chrome.runtime.onMessage.addListener((message) => {
       currentQuestions = [];
       Promise.all([captureUserPrompt(), scrapePreviousDialogue()])
         .then(([promptText, rawHistory]) => {
+          if (!promptText.trim()) {
+            showModalError('No prompt detected. Type something in the chat input first.');
+            return;
+          }
           const dialogueHistory = truncateDialogueHistory(rawHistory);
           showModalProgress('Evaluating your prompt...');
           chrome.runtime.sendMessage({ type: 'ENHANCE', promptText, dialogueHistory, userProfile: {} })
