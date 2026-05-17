@@ -1,0 +1,134 @@
+essay_num,condition,model,tic,thesis,organization,dev_support,dev_analysis,sentence_craft,grammar,citations,hallucination,total,overall_score,req_met,alignment,citation_count,unique_sources,ref_list_count,specificity,composite_score,rubric_raw,req_raw
+1,promptly,chatGPT,2,3,3,2,3,3,3,1,2,22,81,6.0/6,100,12,12,14,23,88.2,"Title, Introduction, Conclusion: 2
+Thesis/Focus: 3
+Organization: 3
+Development - Support: 2
+Development - Analysis: 3
+Sentence Craft & Style: 3
+Grammar and Spelling: 3
+Citations & References: 1
+Hallucination: 2
+Total: 22/27
+Overall Score: 81/100","[1]: YES
+
+[2]: YES
+
+[3]: YES
+
+[4]: YES
+
+[5]: YES
+
+[6]: YES
+
+Requirements Met: 6/6"
+1,promptly,claude,3,3,3,3,3,3,3,2,2,25,93,6.0/6,100,16,13,17,24,93.9,"Title, Introduction, Conclusion: 3
+Thesis/Focus: 3
+Organization: 3
+Development - Support: 3
+Development - Analysis: 3
+Sentence Craft & Style: 3
+Grammar and Spelling: 3
+Citations & References: 2
+Hallucination: 2
+Total: 25/27
+Overall Score: 93/100","[1]: YES
+
+[2]: YES
+
+[3]: YES
+
+[4]: YES
+
+[5]: YES
+
+[6]: YES
+
+Requirements Met: 6/6"
+1,prompt-only,chatGPT,2,3,2,2,2,2,3,1,2,19,70,6.0/6,100,0,0,0,0,42.5,"Title, Introduction, Conclusion: 2
+Thesis/Focus: 3
+Organization: 2
+Development - Support: 2
+Development - Analysis: 2
+Sentence Craft & Style: 2
+Grammar and Spelling: 3
+Citations & References: 1
+Hallucination: 2
+Total: 19/27
+Overall Score: 70/100","[1]: YES
+[2]: YES
+[3]: YES
+[4]: YES
+[5]: YES
+[6]: YES
+
+Requirements Met: 6/6"
+1,prompt-only,claude,3,3,3,3,2,3,3,1,2,23,85,6.0/6,100,8,0,0,14,60.2,"Title, Introduction, Conclusion: 3
+Thesis/Focus: 3
+Organization: 3
+Development - Support: 3
+Development - Analysis: 2
+Sentence Craft & Style: 3
+Grammar and Spelling: 3
+Citations & References: 1
+Hallucination: 2
+Total: 23/27
+Overall Score: 85/100","[1]: YES
+
+[2]: YES
+
+[3]: YES
+
+[4]: YES
+
+[5]: YES
+
+[6]: YES
+
+Requirements Met: 6/6"
+1,cram,chatGPT,2,3,3,3,2,2,3,1,2,21,78,6.0/6,100,0,0,0,0,44.5,"Title, Introduction, Conclusion: 2
+Thesis/Focus: 3
+Organization: 3
+Development - Support: 3
+Development - Analysis: 2
+Sentence Craft & Style: 2
+Grammar and Spelling: 3
+Citations & References: 1
+Hallucination: 2
+Total: 21/27
+Overall Score: 78/100","[1]: YES
+
+[2]: YES
+
+[3]: YES
+
+[4]: YES
+
+[5]: YES
+
+[6]: YES
+
+Requirements Met: 6/6"
+1,cram,claude,3,3,3,3,3,3,3,2,3,26,96,6.0/6,100,10,4,0,5,60.7,"Title, Introduction, Conclusion: 3
+Thesis/Focus: 3
+Organization: 3
+Development - Support: 3
+Development - Analysis: 3
+Sentence Craft & Style: 3
+Grammar and Spelling: 3
+Citations & References: 2
+Hallucination: 3
+Total: 26/27
+Overall Score: 96/100","[1]: YES
+
+[2]: YES
+
+[3]: YES
+
+[4]: YES
+
+[5]: YES
+
+[6]: YES
+
+Requirements Met: 6/6"

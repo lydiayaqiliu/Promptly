@@ -1,10 +1,10 @@
 Average rounds of conversation by topic (English only):
-                            topic  avg_rounds
-   edit_or_critique_provided_text       14.86
-                creative_ideation       11.88
-                    write_fiction       11.28
-personal_writing_or_communication       11.14
-   argument_or_summary_generation        9.94
+                            topic  avg_rounds  n_samples
+   edit_or_critique_provided_text       14.86       3619
+                creative_ideation       11.88        587
+                    write_fiction       11.28       4814
+personal_writing_or_communication       11.14       1204
+   argument_or_summary_generation        9.94       7193
 
 Overall average across all 5 topics: 11.48
-
+Total samples: 17417
