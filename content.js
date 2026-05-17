@@ -81,15 +81,18 @@ function injectEnhancedPrompt(text) {
   if (!el) return;
 
   if (el.tagName === 'TEXTAREA') {
-    el.value = text;
+    // Use native setter so React-controlled textareas (ChatGPT) pick up the change
+    const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+    nativeSetter.call(el, text);
   } else {
+    // ProseMirror (Claude.ai): select contents via Selection API then replace with insertText
     el.focus();
-    let inserted = false;
-    try {
-      document.execCommand('selectAll', false, null);
-      inserted = document.execCommand('insertText', false, text);
-    } catch {}
-    if (!inserted) {
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    if (!document.execCommand('insertText', false, text)) {
       el.innerText = text;
     }
   }
@@ -114,6 +117,10 @@ const MODAL_CSS = `
   }
   #pe-overlay[hidden] { display: none !important; }
   #pe-modal {
+    all: initial;
+    display: block;
+    box-sizing: border-box;
+    font-family: system-ui, sans-serif;
     background: #0f0f11;
     color: #e8e8f0;
     border-radius: 12px;
@@ -396,7 +403,23 @@ function renderSurvey(questions, round, roundReason, maxRounds) {
     const opts = document.createElement('div');
     opts.className = 'pe-options';
 
-    (q.options || []).forEach(opt => {
+    const options = q.options || [];
+    const lastOpt = options[options.length - 1] || '';
+    const hasOther = lastOpt.startsWith('Other');
+
+    // Pre-create the "Other" text input (hidden until that pill is clicked)
+    let otherInput = null;
+    if (hasOther) {
+      otherInput = document.createElement('input');
+      otherInput.type = 'text';
+      otherInput.className = 'pe-open-input';
+      otherInput.dataset.qi = qi;
+      otherInput.placeholder = lastOpt.replace(/^Other\s*[—–-]\s*/i, '') || 'Your answer...';
+      otherInput.style.display = 'none';
+      otherInput.style.marginTop = '8px';
+    }
+
+    options.forEach(opt => {
       const pill = document.createElement('span');
       pill.className = 'pe-option';
       pill.textContent = opt;
@@ -405,11 +428,19 @@ function renderSurvey(questions, round, roundReason, maxRounds) {
       pill.addEventListener('click', () => {
         opts.querySelectorAll('.pe-option').forEach(p => p.classList.remove('pe-selected'));
         pill.classList.add('pe-selected');
+        if (otherInput) {
+          const showing = opt.startsWith('Other');
+          otherInput.style.display = showing ? 'block' : 'none';
+          if (showing) otherInput.focus();
+        }
       });
       opts.appendChild(pill);
     });
 
-    if ((q.options || []).length === 0) {
+    if (otherInput) opts.appendChild(otherInput);
+
+    // Fallback for legacy open-ended questions with no options at all
+    if (options.length === 0) {
       const input = document.createElement('input');
       input.type = 'text';
       input.className = 'pe-open-input';
@@ -429,9 +460,18 @@ function collectModalResponses() {
   const responses = {};
   currentQuestions.forEach((q, qi) => {
     const sel = document.querySelector('.pe-option.pe-selected[data-qi="' + qi + '"]');
-    if (sel) responses[q.question] = sel.dataset.value;
     const openInput = document.querySelector('.pe-open-input[data-qi="' + qi + '"]');
-    if (openInput && openInput.value.trim()) responses[q.question] = openInput.value.trim();
+    if (sel) {
+      const isOther = sel.dataset.value.startsWith('Other');
+      if (isOther && openInput && openInput.value.trim()) {
+        responses[q.question] = openInput.value.trim();
+      } else {
+        responses[q.question] = sel.dataset.value;
+      }
+    } else if (openInput && openInput.value.trim()) {
+      // Pure open-ended question (no pills)
+      responses[q.question] = openInput.value.trim();
+    }
   });
   return responses;
 }
@@ -470,21 +510,23 @@ chrome.runtime.onMessage.addListener((message) => {
   console.log('[PE content.js] received message:', message.type);
 
   switch (message.type) {
-    case 'TRIGGER':
+    case 'TRIGGER': {
       currentQuestions = [];
-      Promise.all([captureUserPrompt(), scrapePreviousDialogue()])
-        .then(([promptText, rawHistory]) => {
-          if (!promptText.trim()) {
-            showModalError('No prompt detected. Type something in the chat input first.');
-            return;
-          }
+      const promptText = captureUserPrompt();
+      if (!promptText.trim()) {
+        showModalError('No prompt detected. Type something in the chat input first.');
+        break;
+      }
+      showModalProgress('Evaluating your prompt...');
+      scrapePreviousDialogue()
+        .then(rawHistory => {
           const dialogueHistory = truncateDialogueHistory(rawHistory);
-          showModalProgress('Evaluating your prompt...');
           chrome.runtime.sendMessage({ type: 'ENHANCE', promptText, dialogueHistory, userProfile: {} })
             .catch(() => {});
         })
         .catch(err => console.error('[PE content.js] TRIGGER setup failed:', err));
       break;
+    }
 
     case 'SHOW_PROGRESS':
       showModalProgress(message.message);
@@ -495,7 +537,7 @@ chrome.runtime.onMessage.addListener((message) => {
       break;
 
     case 'SHOW_RESULT':
-      showModalResult(message.enhancedPrompt, message.warning, message.userProfile);
+      showModalResult(message.enhancedPrompt, message.warning);
       break;
   }
 });

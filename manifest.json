@@ -6,7 +6,7 @@
   "host_permissions": ["https://api.anthropic.com/*"],
   "content_scripts": [
     {
-      "matches": ["https://chat.openai.com/*", "https://claude.ai/*"],
+      "matches": ["https://chat.openai.com/*", "https://chatgpt.com/*", "https://claude.ai/*"],
       "js": ["content.js"]
     }
   ],
@@ -23,7 +23,7 @@
         "evaluation-criteria.md",
         "enhancement-criteria.md"
       ],
-      "matches": ["https://chat.openai.com/*", "https://claude.ai/*"]
+      "matches": ["https://chat.openai.com/*", "https://chatgpt.com/*", "https://claude.ai/*"]
     }
   ]
 }

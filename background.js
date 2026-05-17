@@ -44,11 +44,6 @@ function createClient(apiKey) {
   return new Anthropic({ apiKey, dangerouslyAllowBrowser: true })
 }
 
-function handleAPIError(error) {
-  console.error('[PE background.js] API error:', error)
-  return null
-}
-
 function sendToContentScript(message) {
   chrome.tabs.sendMessage(activeTabId, message)
     .catch(e => console.warn('[PE background.js] content script unreachable:', e))
@@ -201,7 +196,7 @@ async function generateSurveyQuestions(promptText, dialogueHistory, userProfile,
     return parseJSON(response.content[0].text)
     // Expected: [{ question, options }, ...]
   } catch (e) {
-    handleAPIError(e)
+    console.error('[PE background.js] API error:', e)
     return []
   }
 }
@@ -228,11 +223,29 @@ Values are the selected answer strings. No prose, no markdown fences, no explana
   }
 }
 
-// ━━━━━━━ ENHANCEMENT STUB (replaced in Phase 5) ━━━━━━━
+// ━━━━━━━ ENHANCEMENT ━━━━━━━
 
 async function enhancePrompt(promptText, userProfile, dialogueHistory) {
-  console.log('[PE background.js] enhancePrompt() stub — returning null')
-  return null
+  const apiKey = await getApiKey()
+  if (!apiKey) {
+    console.warn('[PE background.js] No API key — cannot enhance')
+    return null
+  }
+  const client = createClient(apiKey)
+  try {
+    const response = await client.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 1000,
+      system: enhancementCriteriaPrompt,
+      messages: [
+        { role: 'user', content: JSON.stringify({ promptText, userProfile, dialogueHistory }) }
+      ]
+    })
+    return response.content[0].text
+  } catch (error) {
+    console.error('[PE background.js] API error:', error)
+    return null
+  }
 }
 
 // ━━━━━━━ LOOP ADVANCEMENT ━━━━━━━
@@ -301,7 +314,7 @@ chrome.action.onClicked.addListener((tab) => {
   setTimeout(() => chrome.tabs.sendMessage(tab.id, { type: 'TRIGGER' }), 300)
 })
 
-chrome.runtime.onMessage.addListener((message, sender) => {
+chrome.runtime.onMessage.addListener((message) => {
   ;(async () => {
     await criteriasReady
     switch (message.type) {

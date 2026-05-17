@@ -132,44 +132,35 @@ Generate questions to collect the missing profile information.
 
 ### Rules
 
-
-- Always prioritize Multiple Choice Question to Free response.
+- **ALL questions MUST be MCQ.** There are no open-ended questions. Every question must have 3–4 substantive option strings, with the final option always being `"Other — [short contextual prompt, e.g. 'describe your reading list here']"` as a free-text escape hatch.
 - Generate one question per item in `missingContext`, up to **5 questions total**
 - If `missingContext` has more than 5 items, select 5 at random; the rest will be addressed in later rounds
 - Never ask about fields already present in `userProfile`, except `knowledgeProfile`
-- Prefer MCQ (3–4 mutually exclusive options)
-- Use open-ended format only when MCQ cannot capture the answer (e.g., `taskDescription`, `userStance`, `readingList`, conceptual familiarity)
-- **CRITICAL — question text must match format:** If you write a question that references "choices", "options", "the following", or "which of these", you MUST populate `options` with the actual choices. Never write MCQ-style question text with `"options": []`. Decide the format first, then write the question text to match:
-  - MCQ → write neutral question text + populate `options` with 3–4 choices
-  - Open-ended → write open question text ("Describe...", "What is...", "Explain...") + `"options": []`
+- Write neutral question text — never reference "the following choices" or "which of these" unless the options are actually enumerated in `options`
 - If `missingContext` includes `userStance` and the user previously said "I don't know" — do NOT ask again; auto-assign a stance and note it in the question's options
-- If `missingContext` includes `readingList` — ask the user to list the assigned or recommended readings for this task; use open-ended format since reading lists cannot be meaningfully enumerated as MCQ options
-- If `missingContext` includes `referenceCount` — ask how many sources the user is required or expected to cite; use MCQ with options such as: "None", "1–3", "4–6", "7 or more"
+- If `missingContext` includes `readingList` — infer 2–3 plausible readings from `topicAndDiscipline` and `taskDescription` as options; final option must be `"Other — list your assigned readings here"`
+- If `missingContext` includes `referenceCount` — use options: `"None"`, `"1–3"`, `"4–6"`, `"7 or more"`. No "Other" needed here since the set is exhaustive.
 - If `"knowledgeProfile"` appears in `missingContext`, generate knowledge probe questions derived from `topicAndDiscipline`, `taskDescription`, and `educationalLevel`:
   - Identify the specific knowledge dimensions the task requires (e.g., which mathematical operations, which historical periods, which biological mechanisms)
-  - **Factual probe** — MCQ questions testing understanding of those specific dimensions, pitched at the level implied by `educationalLevel`
-  - **Open-ended probe** — Ask which specific concepts, frameworks, or arguments the user is already familiar with; use open-ended format
-  - **Probe limit** — At most 2 probe questions total. Generate a second only when `userProfile` already contains a partial knowledge signal for the task. If no signal exists, generate exactly 1. These count toward the 5-question cap.
+  - **Factual probe** — MCQ testing understanding of those dimensions, pitched at `educationalLevel`; final option `"Other — describe your understanding here"`
+  - **Conceptual familiarity probe** — MCQ listing the key concepts/frameworks the task involves, asking which the user knows; final option `"Other — list what you know here"`
+  - **Probe limit** — At most 2 probe questions total. Generate a second only when `userProfile` already contains a partial knowledge signal. These count toward the 5-question cap.
 
-### CRITICAL — options field on open-ended questions
+### CRITICAL — options field
 
-The modal UI calls `q.options.forEach(...)` unconditionally. An open-ended
-question with no `options` field will crash the rendering. Every question
-object MUST include an `options` array:
-- MCQ questions: include the actual options
-- Open-ended questions: include `"options": []` (empty array)
-
-The UI will suppress the pill buttons when `options` is empty and render a
-free-text response area instead.
+The modal UI calls `q.options.forEach(...)` unconditionally. Every question object
+MUST include an `options` array with at least 2 entries. Never output `"options": []`.
 
 ### Task 2 output — ONLY this JSON array (no prose, no fences):
 
 ```
 [
-  { "question": "...", "options": ["A", "B", "C"], "type": "mcq" },
-  { "question": "...", "options": [], "type": "open" },
+  { "question": "...", "options": ["A", "B", "C", "Other — describe here"], "type": "mcq" },
+  { "question": "...", "options": ["None", "1–3", "4–6", "7 or more"], "type": "mcq" },
   ...
 ]
 ```
+
+`type` is always `"mcq"`.
 
 `options` is ALWAYS present. `type` is `"mcq"` or `"open"`.

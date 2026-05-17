@@ -3329,10 +3329,6 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
   function createClient(apiKey) {
     return new sdk_default({ apiKey, dangerouslyAllowBrowser: true });
   }
-  function handleAPIError(error) {
-    console.error("[PE background.js] API error:", error);
-    return null;
-  }
   function sendToContentScript(message) {
     chrome.tabs.sendMessage(activeTabId, message).catch((e) => console.warn("[PE background.js] content script unreachable:", e));
   }
@@ -3455,7 +3451,7 @@ No prose, no markdown fences, no explanation. Return {} if nothing is clearly in
       });
       return parseJSON(response.content[0].text);
     } catch (e) {
-      handleAPIError(e);
+      console.error("[PE background.js] API error:", e);
       return [];
     }
   }
@@ -3481,8 +3477,26 @@ Values are the selected answer strings. No prose, no markdown fences, no explana
     }
   }
   async function enhancePrompt(promptText, userProfile, dialogueHistory) {
-    console.log("[PE background.js] enhancePrompt() stub \u2014 returning null");
-    return null;
+    const apiKey = await getApiKey();
+    if (!apiKey) {
+      console.warn("[PE background.js] No API key \u2014 cannot enhance");
+      return null;
+    }
+    const client = createClient(apiKey);
+    try {
+      const response = await client.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 1e3,
+        system: enhancementCriteriaPrompt,
+        messages: [
+          { role: "user", content: JSON.stringify({ promptText, userProfile, dialogueHistory }) }
+        ]
+      });
+      return response.content[0].text;
+    } catch (error) {
+      console.error("[PE background.js] API error:", error);
+      return null;
+    }
   }
   async function advanceLoop(evalResult) {
     const { sufficient, missingContext, roundReason } = evalResult;
@@ -3540,7 +3554,7 @@ Values are the selected answer strings. No prose, no markdown fences, no explana
     activeTabId = tab.id;
     setTimeout(() => chrome.tabs.sendMessage(tab.id, { type: "TRIGGER" }), 300);
   });
-  chrome.runtime.onMessage.addListener((message, sender) => {
+  chrome.runtime.onMessage.addListener((message) => {
     ;
     (async () => {
       await criteriasReady;
