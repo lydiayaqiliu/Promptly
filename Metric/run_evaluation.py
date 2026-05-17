@@ -271,8 +271,8 @@ def check_requirements(essay_text: str, essay_num: int, client: anthropic.Anthro
     )
     raw = response.content[0].text.strip()
 
-    yes_count = len(re.findall(r"\[\d+\]:\s*YES", raw, re.IGNORECASE))
-    partial_count = len(re.findall(r"\[\d+\]:\s*PARTIAL", raw, re.IGNORECASE))
+    yes_count = len(re.findall(r"\[?\d+\]?:\s*YES", raw, re.IGNORECASE))
+    partial_count = len(re.findall(r"\[?\d+\]?:\s*PARTIAL", raw, re.IGNORECASE))
     total = len(reqs)
     score = yes_count + partial_count * 0.5
 

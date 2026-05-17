@@ -1,0 +1,74 @@
+Found 11 essay file(s). Evaluating...
+
+  Essay1-promptly-chatGPT.txt
+    rubric ... score=78/100
+    requirements ... met=6.0/6  alignment=100%
+    citations=12  unique=12  refs=14  specificity=23
+    composite=87.5/100
+  Essay1-promptly-claude.txt
+    rubric ... score=89/100
+    requirements ... met=6.0/6  alignment=100%
+    citations=16  unique=13  refs=17  specificity=24
+    composite=92.9/100
+  Essay1-prompt-only-chatGPT.txt
+    rubric ... score=70/100
+    requirements ... met=6.0/6  alignment=100%
+    citations=0  unique=0  refs=0  specificity=0
+    composite=42.5/100
+  Essay1-prompt-only-claude.txt
+    rubric ... score=89/100
+    requirements ... met=6.0/6  alignment=100%
+    citations=8  unique=0  refs=0  specificity=14
+    composite=61.2/100
+  Essay1-cram-chatGPT.txt
+    rubric ... score=78/100
+    requirements ... met=6.0/6  alignment=100%
+    citations=0  unique=0  refs=0  specificity=0
+    composite=44.5/100
+  Essay1-cram-claude.txt
+    rubric ... score=96/100
+    requirements ... met=6.0/6  alignment=100%
+    citations=10  unique=4  refs=0  specificity=5
+    composite=60.7/100
+  Essay2-promptly-chatGPT.txt
+    rubric ... score=74/100
+    requirements ... met=5.5/6  alignment=92%
+    citations=6  unique=4  refs=6  specificity=7
+    composite=55.2/100
+  Essay2-promptly-claude.txt
+    rubric ... score=93/100
+    requirements ... met=6.0/6  alignment=100%
+    citations=11  unique=7  refs=8  specificity=13
+    composite=72.9/100
+  Essay2-prompt-only-claude.txt
+    rubric ... score=93/100
+    requirements ... met=5.5/6  alignment=92%
+    citations=10  unique=3  refs=8  specificity=11
+    composite=62.2/100
+  Essay2-cram-chatGPT.txt
+    rubric ... score=85/100
+    requirements ... met=6.0/6  alignment=100%
+    citations=3  unique=3  refs=4  specificity=6
+    composite=57.2/100
+  Essay2-cram-claude.txt
+    rubric ... score=96/100
+    requirements ... met=6.0/6  alignment=100%
+    citations=18  unique=5  refs=5  specificity=11
+    composite=68.3/100
+
+Results saved to /Users/lydiayaqiliu/Promptly/Metric/evaluation_results.csv
+
+── Summary ──────────────────────────────────────────────────────────────────────
+Essay    Condition      Model         Rubric  Align%  Uniq  Spec  Composite
+────────────────────────────────────────────────────────────────────────────────
+Essay 1   promptly       chatGPT           78     100    12    23       87.5
+Essay 1   promptly       claude            89     100    13    24       92.9
+Essay 1   prompt-only    chatGPT           70     100     0     0       42.5
+Essay 1   prompt-only    claude            89     100     0    14       61.2
+Essay 1   cram           chatGPT           78     100     0     0       44.5
+Essay 1   cram           claude            96     100     4     5       60.7
+Essay 2   promptly       chatGPT           74      92     4     7       55.2
+Essay 2   promptly       claude            93     100     7    13       72.9
+Essay 2   prompt-only    claude            93      92     3    11       62.2
+Essay 2   cram           chatGPT           85     100     3     6       57.2
+Essay 2   cram           claude            96     100     5    11       68.3
