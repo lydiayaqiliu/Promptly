@@ -135,6 +135,8 @@ Possible fields (all optional):
   audience            string  — intended reader, if mentioned
   length              string  — length or page count, if mentioned
   referenceRequirements string — citation style or "no references", if mentioned
+  referenceCount      string  — number of sources required, e.g. "3", "5–7", "None", if mentioned
+  readingList         string  — assigned or recommended readings, if listed in the prompt
   userStance          string  — user's argument or position, if stated
   intentionalErrors   string  — "Yes" or "No", only if explicitly mentioned
 

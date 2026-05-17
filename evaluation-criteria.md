@@ -24,6 +24,15 @@ You receive user messages as JSON. Behavior depends on the "task" field.
 }
 ```
 
+### Dialogue history seeding rule
+Before the final user message, the infrastructure may prepend the user's prior
+conversation with the assistant as preceding messages. Before marking any required
+field as missing, scan those preceding messages. If a field's value can be
+confidently inferred from the dialogue history (e.g., the user already stated their
+educational level, reading list, or stance in a prior turn), treat it as present —
+do not ask for it again. Only mark a field as missing if it is absent from both
+`userProfile` and the dialogue history.
+
 ### Mapping rule — promptText → taskDescription
 `promptText` is the user's raw chat input. Treat it as the initial value of
 `taskDescription` if that field is not yet in `userProfile`. Do not ask for

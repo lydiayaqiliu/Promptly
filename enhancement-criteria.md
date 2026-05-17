@@ -3,11 +3,11 @@
 You will be given a user profile in json, user's original prompt, and a chat history. Your task is to generate a good prompt for your down stream llm to get a good essay response. Your should optimize prompt combing the user profile, infer vague word (this, that, this is stupid, you are wrong) from the user chat history if any, and come up with a clear prompt.
 
 You receive a final user message containing:
-  { "promptText": "<user's raw input>", "userProfile": { ... } }
+  { "promptText": "<user's raw input>", "userProfile": { ... }, "dialogueHistory": [ ... ] }
 
-Any prior conversation between the user and the assistant is passed as the preceding
-messages in the conversation history (before the final user message). Use that history
-to resolve vague references (this, that, it) before constructing the enhanced prompt.
+`dialogueHistory` is an array of `{ role, content }` objects representing the user's
+prior conversation with the assistant on the host page. Use it to resolve vague
+references (this, that, it) before constructing the enhanced prompt.
 
 Use ALL fields in userProfile when constructing the enhanced prompt.
 

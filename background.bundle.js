@@ -3390,6 +3390,8 @@ Possible fields (all optional):
   audience            string  \u2014 intended reader, if mentioned
   length              string  \u2014 length or page count, if mentioned
   referenceRequirements string \u2014 citation style or "no references", if mentioned
+  referenceCount      string  \u2014 number of sources required, e.g. "3", "5\u20137", "None", if mentioned
+  readingList         string  \u2014 assigned or recommended readings, if listed in the prompt
   userStance          string  \u2014 user's argument or position, if stated
   intentionalErrors   string  \u2014 "Yes" or "No", only if explicitly mentioned
 
