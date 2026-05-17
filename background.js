@@ -96,7 +96,9 @@ function parseJSON(text) {
   } catch {
     // Model added prose before/after the JSON — extract the first {...} or [...]
     const match = stripped.match(/(\{[\s\S]*\}|\[[\s\S]*\])/)
-    if (match) return JSON.parse(match[1])
+    if (match) {
+      try { return JSON.parse(match[1]) } catch { /* fall through */ }
+    }
     throw new SyntaxError('No JSON found in LLM response')
   }
 }
@@ -123,6 +125,7 @@ Possible fields (all optional):
   educationalLevel    string  — e.g. "high school", "undergraduate", "graduate"
   topicAndDiscipline  string  — subject area and discipline
   outputFormat        string  — e.g. "essay", "LaTeX", "short answer", "paper with references"
+  materials           string  — course or topic context if explicitly stated (e.g. "Econ 201", "AP Biology"); omit if not mentioned
   audience            string  — intended reader, if mentioned
   length              string  — length or page count, if mentioned
   referenceRequirements string — citation style or "no references", if mentioned
@@ -156,14 +159,15 @@ async function evaluateProfileSufficiency(promptText, dialogueHistory, userProfi
   try {
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 300,
+      max_tokens: 500,
       system: evaluationCriteriaPrompt,
       messages: [
         ...sanitizeDialogueHistory(dialogueHistory),
-        { role: 'user', content: JSON.stringify({ promptText, userProfile }) }
+        { role: 'user', content: JSON.stringify({ promptText, userProfile }) },
+        { role: 'assistant', content: '{' }
       ]
     })
-    return parseJSON(response.content[0].text)
+    return parseJSON('{' + response.content[0].text)
     // Expected: { sufficient, missingContext, roundReason }
   } catch (e) {
     console.warn('[PE background.js] evaluateProfileSufficiency error:', e)
@@ -182,7 +186,7 @@ async function generateSurveyQuestions(promptText, dialogueHistory, userProfile,
   try {
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 600,
+      max_tokens: 1000,
       system: evaluationCriteriaPrompt,
       messages: [
         ...sanitizeDialogueHistory(dialogueHistory),
@@ -190,10 +194,11 @@ async function generateSurveyQuestions(promptText, dialogueHistory, userProfile,
           role: 'user', content: JSON.stringify({
             task: 'generate_survey', promptText, userProfile, missingContext
           })
-        }
+        },
+        { role: 'assistant', content: '[' }
       ]
     })
-    return parseJSON(response.content[0].text)
+    return parseJSON('[' + response.content[0].text)
     // Expected: [{ question, options }, ...]
   } catch (e) {
     console.error('[PE background.js] API error:', e)
@@ -232,12 +237,15 @@ No prose, no markdown fences, no explanation.`
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 300,
       system,
-      messages: [{ role: 'user', content: JSON.stringify({ responses: rawResponses, promptText }) }]
+      messages: [
+        { role: 'user', content: JSON.stringify({ responses: rawResponses, promptText }) },
+        { role: 'assistant', content: '{' }
+      ]
     })
-    return parseJSON(response.content[0].text)
+    return parseJSON('{' + response.content[0].text)
   } catch (e) {
-    console.warn('[PE background.js] mapResponsesToProfile failed — using raw responses:', e)
-    return rawResponses
+    console.warn('[PE background.js] mapResponsesToProfile failed — discarding responses to avoid profile corruption:', e)
+    return {}
   }
 }
 
@@ -268,53 +276,50 @@ async function enhancePrompt(promptText, userProfile, dialogueHistory) {
 
 // ━━━━━━━ LOOP ADVANCEMENT ━━━━━━━
 
+async function runEnhance() {
+  if (!pendingSession) return
+  sendToContentScript({ type: 'SHOW_PROGRESS', message: 'Enhancing your prompt...' })
+  const result = await enhancePrompt(
+    pendingSession.promptText,
+    pendingSession.userProfile,
+    pendingSession.dialogueHistory
+  )
+  const enhanced = result ?? pendingSession.promptText
+  const warning = result === null
+  sendToContentScript({ type: 'SHOW_RESULT', enhancedPrompt: enhanced, warning, userProfile: pendingSession.userProfile })
+  await clearSessionState()
+}
+
 async function advanceLoop(evalResult) {
+  if (!pendingSession) return
   const { sufficient, missingContext, roundReason } = evalResult
   const meetsMin = pendingSession.surveyRound >= criteria.minRounds
   const hitMax = pendingSession.surveyRound >= criteria.maxRounds
   const shouldEnhance = (sufficient && meetsMin) || hitMax
 
   if (shouldEnhance) {
-    sendToContentScript({ type: 'SHOW_PROGRESS', message: 'Enhancing your prompt...' })
-    const result = await enhancePrompt(
-      pendingSession.promptText,
-      pendingSession.userProfile,
-      pendingSession.dialogueHistory
-    )
-    const enhanced = result ?? pendingSession.promptText
-    const warning = result === null
-    sendToContentScript({ type: 'SHOW_RESULT', enhancedPrompt: enhanced, warning, userProfile: pendingSession.userProfile })
-    await clearSessionState()
+    await runEnhance()
 
   } else {
     // Drop fields already captured in userProfile so they are never re-asked
     const profileKeys = new Set(Object.keys(pendingSession.userProfile))
     const filteredMissing = missingContext.filter(field => !profileKeys.has(field))
-    const contextToAsk = filteredMissing.length > 0
-      ? filteredMissing
-      : ['general context about goal and audience']
+
+    // All gaps already answered — no point asking a vague survey, just enhance
+    if (filteredMissing.length === 0) {
+      await runEnhance()
+      return
+    }
+
     const questions = await generateSurveyQuestions(
       pendingSession.promptText,
       pendingSession.dialogueHistory,
       pendingSession.userProfile,
-      contextToAsk
+      filteredMissing
     )
     if (!questions || questions.length === 0) {
       console.warn('[PE background.js] No questions generated — forcing enhance')
-      sendToContentScript({ type: 'SHOW_PROGRESS', message: 'Enhancing your prompt...' })
-      const result = await enhancePrompt(
-        pendingSession.promptText,
-        pendingSession.userProfile,
-        pendingSession.dialogueHistory
-      )
-      const enhanced = result ?? pendingSession.promptText
-      sendToContentScript({
-        type: 'SHOW_RESULT',
-        enhancedPrompt: enhanced,
-        warning: result === null,
-        userProfile: pendingSession.userProfile
-      })
-      await clearSessionState()
+      await runEnhance()
       return
     }
     sendToContentScript({
@@ -373,6 +378,11 @@ chrome.runtime.onMessage.addListener((message) => {
         )
         console.log('[PE background.js] evalResult:', evalResult)
         await advanceLoop(evalResult)
+        break
+      }
+
+      case 'CANCEL_SESSION': {
+        await clearSessionState()
         break
       }
 

@@ -15,6 +15,7 @@
   },
   "options_page": "popup.html",
   "icons": {
+<<<<<<< HEAD
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
@@ -24,6 +25,17 @@
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
+=======
+    "16":  "icon16.png",
+    "48":  "icon48.png",
+    "128": "icon128.png"
+  },
+  "action": {
+    "default_icon": {
+      "16":  "icon16.png",
+      "48":  "icon48.png",
+      "128": "icon128.png"
+>>>>>>> 5622bb80fc0a344fb6ebfcec9903708275119787
     }
   },
   "web_accessible_resources": [

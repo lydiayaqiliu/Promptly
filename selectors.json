@@ -1,10 +1,17 @@
 {
   "chat.openai.com": {
     "user": "[data-message-author-role='user']",
-    "assistant": "[data-message-author-role='assistant']"
+    "assistant": "[data-message-author-role='assistant']",
+    "chatInput": "#prompt-textarea"
+  },
+  "chatgpt.com": {
+    "user": "[data-message-author-role='user']",
+    "assistant": "[data-message-author-role='assistant']",
+    "chatInput": "#prompt-textarea"
   },
   "claude.ai": {
     "user": ".mb-1.mt-6.group",
-    "assistant": ".group.relative.pb-3"
+    "assistant": ".group.relative.pb-3",
+    "chatInput": "div.ProseMirror[contenteditable='true']"
   }
 }
