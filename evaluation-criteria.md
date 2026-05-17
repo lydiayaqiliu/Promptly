@@ -124,6 +124,9 @@ Generate questions to collect the missing profile information.
 - Never ask about fields already present in `userProfile`, except `knowledgeProfile`
 - Prefer MCQ (3–4 mutually exclusive options)
 - Use open-ended format only when MCQ cannot capture the answer (e.g., `taskDescription`, `userStance`, conceptual familiarity)
+- **CRITICAL — question text must match format:** If you write a question that references "choices", "options", "the following", or "which of these", you MUST populate `options` with the actual choices. Never write MCQ-style question text with `"options": []`. Decide the format first, then write the question text to match:
+  - MCQ → write neutral question text + populate `options` with 3–4 choices
+  - Open-ended → write open question text ("Describe...", "What is...", "Explain...") + `"options": []`
 - If `missingContext` includes `userStance` and the user previously said "I don't know" — do NOT ask again; auto-assign a stance and note it in the question's options
 - If `"knowledgeProfile"` appears in `missingContext`, generate knowledge probe questions derived from `topicAndDiscipline`, `taskDescription`, and `educationalLevel`:
   - Identify the specific knowledge dimensions the task requires (e.g., which mathematical operations, which historical periods, which biological mechanisms)
