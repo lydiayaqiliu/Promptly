@@ -53,7 +53,9 @@ hallucinating or making ungrounded assumptions.
 - **taskDescription** — A clear description of what the user is asked to do. Seed from `promptText` if absent.
 - **outputFormat** — Required output format (e.g., LaTeX, essay, paper with references, short answer)
 - **taskType** — Inferred by the evaluator from taskDescription. Never supplied by the user. See inference rules.
-- **materials** — Source materials the user has available (syllabus, reading list, lecture notes, textbook chapters). "None" is valid and triggers the probe pipeline.
+- **materials** — Source materials the user has available (syllabus, lecture notes, textbook chapters). "None" is valid and triggers the probe pipeline.
+- **readingList** — The assigned or recommended reading list for the task (e.g., specific papers, book chapters, articles). "None" is valid.
+- **referenceCount** — The number of sources the user is required (or intends) to cite in the output. "None" is valid when no references are needed. Required independently of `referenceRequirements`.
 - **userStance** — For open-ended or combined tasks: the user's argument, position, or perspective. "I don't know" is valid and triggers auto-assignment.
 - **intentionalErrors** — For factual tasks: whether any answers should be deliberately wrong. "No" is a valid answer.
 - **referenceRequirements** — Required when outputFormat involves citations (essay with references, annotated bibliography, literature review, etc.). "No preference" is valid.
@@ -75,6 +77,8 @@ When in doubt between open-ended and combined, default to **combined** — it ap
 - `educationalLevel`, `topicAndDiscipline`, `taskDescription`, and `outputFormat` must always be present → if any are missing: insufficient
 - `taskType` must be inferrable from `taskDescription` → if too vague to classify: insufficient
 - `materials` must always be present; "None" is accepted but triggers the probe pipeline → profile is not sufficient until probe results populate `knowledgeProfile`
+- `readingList` must always be present; "None" is accepted
+- `referenceCount` must always be present; "None" is accepted when no references are required
 - If `taskType` is open-ended or combined → `userStance` must be present; if "I don't know", auto-assign a stance and set `stanceAutoAssigned: true`
 - If `outputFormat` requires citations → `referenceRequirements` must be present
 - If the task implies a specific target reader → `audience` must be present
@@ -119,15 +123,19 @@ Generate questions to collect the missing profile information.
 
 ### Rules
 
+
+- Always prioritize Multiple Choice Question to Free response.
 - Generate one question per item in `missingContext`, up to **5 questions total**
 - If `missingContext` has more than 5 items, select 5 at random; the rest will be addressed in later rounds
 - Never ask about fields already present in `userProfile`, except `knowledgeProfile`
 - Prefer MCQ (3–4 mutually exclusive options)
-- Use open-ended format only when MCQ cannot capture the answer (e.g., `taskDescription`, `userStance`, conceptual familiarity)
+- Use open-ended format only when MCQ cannot capture the answer (e.g., `taskDescription`, `userStance`, `readingList`, conceptual familiarity)
 - **CRITICAL — question text must match format:** If you write a question that references "choices", "options", "the following", or "which of these", you MUST populate `options` with the actual choices. Never write MCQ-style question text with `"options": []`. Decide the format first, then write the question text to match:
   - MCQ → write neutral question text + populate `options` with 3–4 choices
   - Open-ended → write open question text ("Describe...", "What is...", "Explain...") + `"options": []`
 - If `missingContext` includes `userStance` and the user previously said "I don't know" — do NOT ask again; auto-assign a stance and note it in the question's options
+- If `missingContext` includes `readingList` — ask the user to list the assigned or recommended readings for this task; use open-ended format since reading lists cannot be meaningfully enumerated as MCQ options
+- If `missingContext` includes `referenceCount` — ask how many sources the user is required or expected to cite; use MCQ with options such as: "None", "1–3", "4–6", "7 or more"
 - If `"knowledgeProfile"` appears in `missingContext`, generate knowledge probe questions derived from `topicAndDiscipline`, `taskDescription`, and `educationalLevel`:
   - Identify the specific knowledge dimensions the task requires (e.g., which mathematical operations, which historical periods, which biological mechanisms)
   - **Factual probe** — MCQ questions testing understanding of those specific dimensions, pitched at the level implied by `educationalLevel`
